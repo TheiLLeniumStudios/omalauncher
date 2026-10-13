@@ -40,20 +40,38 @@ fun editWidgetCommand(
     return agentCommand(agentBin, prompt)
 }
 
-/** Submits a widget to the store: the agent opens a pull request on the store repo with the GitHub CLI, or an issue if it can't. */
+/**
+ * Submits a widget to [store]. The built-in one is reviewed: the agent opens a pull request there with the
+ * GitHub CLI, or an issue if it can't. A store the user added is their own: the agent pushes straight to it.
+ */
 fun publishWidgetCommand(
     agentBin: String,
     spec: WidgetSpec,
+    store: Store,
 ): String {
     val file = spec.file.name
     val prompt =
-        "Publish my home-screen widget $file to the widget store at https://github.com/${Store.BUILT_IN.repo}. " +
-            "Use the GitHub CLI: install github-cli with pacman and run gh auth login if needed. Read the repo's README for the rules, " +
-            "then fork it and add the widget as widgets/<my GitHub username in lowercase>/<a short name>/widget.owl, with the " +
-            "preview.png owl-check points to next to it. Its meta needs a description, a version and a license (ask me which license; " +
-            "suggest MIT), and it should declare its packages in requires. Leave out anything personal: tokens, paths to my files, my " +
-            "location. Show me the final file before pushing, then open the pull request and give me its link. If I'd rather not fork, " +
-            "or the pull request can't be opened, open an issue there instead with the widget's file in a code block and give me its link."
+        if (store.reviewed) {
+            "Publish my home-screen widget $file to the widget store at https://github.com/${store.repo}. " +
+                "Use the GitHub CLI: install github-cli with pacman and run gh auth login if needed. Read the repo's README for the rules, " +
+                "then fork it and add the widget as widgets/<my GitHub username in lowercase>/<a short name>/widget.owl, with the " +
+                "preview.png owl-check points to next to it. Its meta needs a description, a version and a license (ask me which license; " +
+                "suggest MIT), and it should declare its packages in requires. Leave out anything personal: tokens, paths to my files, my " +
+                "location. Show me the final file before pushing, then open the pull request and give me its link. If I'd rather not fork, " +
+                "or the pull request can't be opened, open an issue there instead with the widget's file in a code block and give me its link."
+        } else {
+            "Publish my home-screen widget $file to my own widget store https://github.com/${store.repo} by committing to its main " +
+                "branch and pushing: no fork, no pull request. Use the GitHub CLI (install github-cli with pacman if it's missing). " +
+                "First run gh auth status. If I'm not logged in, STOP and tell me to create a fine-grained token limited to ${store.repo} " +
+                "with only \"Contents: read and write\" and an expiry, then to run gh auth login --with-token and gh auth setup-git; " +
+                "do NOT run an interactive gh auth login yourself. Clone the repo to ~/stores/${store.repo.replace('/', '-')}, or git pull " +
+                "if it's already there. Add the widget as widgets/<my GitHub username in lowercase, from gh api user>/<a short name>/widget.owl, " +
+                "with the preview.png owl-check points to next to it. Its meta needs a description, a version and a license (ask me which " +
+                "license; suggest MIT), and it should declare its packages in requires. If that widget is already there, raise its meta " +
+                "version so the app offers an update. Leave out anything personal: tokens, paths to my files, my location. Show me the final " +
+                "file before pushing, then commit with a Conventional Commits message, push, and give me the store page ${store.base}; " +
+                "it's live once the repo's Pages workflow finishes, in about a minute."
+        }
     return agentCommand(agentBin, prompt)
 }
 
