@@ -22,6 +22,7 @@ class Compiler private constructor(
          * instead of failing on what they don't know. Bump it with every
          * addition a widget could depend on: nodes, properties, builtins.
          */
+        // 8 (android.location) was assigned in this fork ahead of upstream #42; renumber it if upstream gives 8 to something else.
         const val LEVEL = 8
         private const val MAX_ASSET_BYTES = 2 shl 20
 
