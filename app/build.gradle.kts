@@ -20,6 +20,11 @@ android {
         targetSdk = 37
         versionCode = 12
         versionName = "0.7.0"
+        // Fork CI (apk.yml): each edge build newer than the last and than upstream's own, named after its commit.
+        providers.gradleProperty("ciRun").orNull?.let { run ->
+            this.versionCode = versionCode!! * 100_000 + run.toInt()
+            versionName += "-" + providers.gradleProperty("ciSha").get()
+        }
         ndk { abiFilters += "arm64-v8a" }
     }
 
