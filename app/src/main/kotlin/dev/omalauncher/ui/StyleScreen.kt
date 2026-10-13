@@ -1,8 +1,5 @@
 package dev.omalauncher.ui
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -285,14 +282,8 @@ private fun BackgroundSection(
             )
         }
     }
-    StyleOption("lock cover", listOf("off", "on"), if (store.lockCoverEnabled) 1 else 0) { i ->
-        store.setLockCover(i == 1)
-        // Without it Android refuses the cover once another app is in front.
-        if (i == 1 && !Settings.canDrawOverlays(context)) {
-            runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }
-        }
-    }
-    OptionHint("shows over the lock screen; your PIN or fingerprint still unlocks · allow \"display over other apps\" so it shows after other apps too")
+    StyleOption("lock cover", listOf("off", "on"), if (store.lockCoverEnabled) 1 else 0) { store.setLockCover(it == 1) }
+    OptionHint("shows over the lock screen while omalauncher is your home app; your PIN or fingerprint still unlocks")
 }
 
 /** The terminals' font and the size they open at, on top of Android's font size; see [TerminalFont]. */

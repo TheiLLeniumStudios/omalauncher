@@ -90,7 +90,7 @@ class LockCoverActivity : ComponentActivity() {
     companion object {
         private const val TAG = "lock-cover"
 
-        /** Puts the cover up; Android may refuse a start from the background (no "display over other apps"). */
+        /** Puts the cover up; Android allows that from the background for the default home app, and may refuse it otherwise. */
         fun show(context: Context) {
             runCatching {
                 context.startActivity(
