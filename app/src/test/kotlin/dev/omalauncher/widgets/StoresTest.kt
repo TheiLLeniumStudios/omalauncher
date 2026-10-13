@@ -60,7 +60,9 @@ class StoresTest {
         val other = Store("Some.One/My_Widgets")
         val keys = listOf(Store.BUILT_IN, mine, other).map { installKey(it, "simon/clock") }
         assertEquals(3, keys.toSet().size)
-        assertEquals("TheiLLeniumStudios/omarchy-widgets:simon/clock", installKey(mine, "simon/clock"))
+        assertEquals("theilleniumstudios/omarchy-widgets:simon/clock", installKey(mine, "simon/clock"))
+        // Re-added with other capitals, the store still finds its installs.
+        assertEquals(installKey(mine, "simon/clock"), installKey(Store("theilleniumstudios/OMARCHY-WIDGETS"), "simon/clock"))
         assertEquals("market-theilleniumstudios-omarchy-widgets-simon-clock.owl", installFile(mine, "simon", "clock"))
         assertEquals("market-some-one-my-widgets-simon-clock.owl", installFile(other, "simon", "clock"))
     }
