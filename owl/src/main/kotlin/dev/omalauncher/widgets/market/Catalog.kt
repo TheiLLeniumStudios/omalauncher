@@ -72,7 +72,7 @@ object Catalog {
         val size = (f["size"] as? Lst)?.items?.mapNotNull { it.num()?.toInt() }?.takeIf { it.size == 2 }?.let { it[0] to it[1] }
         val requires =
             (f["requires"] as? Obj)?.fields.orEmpty().mapValues { (_, v) -> (v as? Lst)?.items.orEmpty().mapNotNull { (it as? Str)?.v } }
-        // Both name the installed file (Market.fileFor), so only what Review lets into the store.
+        // Both name the installed file (installFile in the app's Stores.kt), so only what Review lets into the store.
         val id = s("id")?.takeIf { it.matches(ID) } ?: return null
         val author = s("author")?.takeIf { it == id.substringBefore('/') } ?: return null
         return CatalogEntry(

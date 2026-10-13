@@ -47,7 +47,7 @@ fun publishWidgetCommand(
 ): String {
     val file = spec.file.name
     val prompt =
-        "Publish my home-screen widget $file to the widget store at https://github.com/${Market.REPO}. " +
+        "Publish my home-screen widget $file to the widget store at https://github.com/${Store.BUILT_IN.repo}. " +
             "Use the GitHub CLI: install github-cli with pacman and run gh auth login if needed. Read the repo's README for the rules, " +
             "then fork it and add the widget as widgets/<my GitHub username in lowercase>/<a short name>/widget.owl, with the " +
             "preview.png owl-check points to next to it. Its meta needs a description, a version and a license (ask me which license; " +

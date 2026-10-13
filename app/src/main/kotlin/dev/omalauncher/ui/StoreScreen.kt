@@ -58,8 +58,8 @@ import kotlinx.coroutines.launch
 
 /**
  * The widget store: built-in terminal tiles (a plain shell, and one per installed coding agent), then
- * reviewed widgets from the marketplace repo as a grid of previews, with
- * search and category tabs. Tapping a widget opens its page, which shows what
+ * the picked store's widgets (the reviewed built-in one, or one the user added) as a grid of previews,
+ * with search and category tabs. Tapping a widget opens its page, which shows what
  * it installs and runs; from there it goes on the current page (or updates).
  */
 @Composable
@@ -116,8 +116,15 @@ fun StoreScreen(
                     },
                 )
             }
+            // Another store's widgets: start over from its whole list.
+            val onStore = {
+                filter.query = ""
+                filter.tab = ALL
+                open = null
+                message = null
+            }
             val list = @Composable { modifier: Modifier ->
-                StoreList(engine, agents, page, theme, filter, if (wide) open else null, modifier, select, onDismiss)
+                StoreList(engine, agents, page, theme, filter, if (wide) open else null, modifier, select, onStore, onDismiss)
             }
             when {
                 // Side by side: the grid, and the picked widget's page beside it.
@@ -151,7 +158,7 @@ private class StoreFilter {
     val grid = LazyGridState()
 }
 
-/** The store's search, category tabs and grid; [selected] is the widget whose page shows beside it. */
+/** The store's search, category tabs and grid; [selected] is the widget whose page shows beside it; [onStore] runs once another store is picked. */
 @Composable
 private fun StoreList(
     engine: WidgetEngine,
@@ -162,6 +169,7 @@ private fun StoreList(
     selected: String?,
     modifier: Modifier,
     onOpen: (String) -> Unit,
+    onStore: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val market = engine.market
@@ -190,6 +198,7 @@ private fun StoreList(
                 }.filter { e -> q.isEmpty() || listOf(e.name, e.description, e.author, e.category.orEmpty()).any { q in it.lowercase() } }
         val updates = installed.count { market.hasUpdate(it) }
 
+        StoreChips(market, onStore)
         SearchField(filter.query, { filter.query = it }, onGo = { keyboard?.hide() }, placeholder = "search ${market.entries.size} widgets")
         Spacer(Modifier.height(8.dp))
         // Scrolls under the panel's padding, up to its frame or, side by side, the divider.
@@ -234,7 +243,20 @@ private fun StoreList(
             }
             item(key = "catalog", span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Caption("reviewed widgets from github.com/${Market.REPO}")
+                    val store = market.current
+                    if (store.reviewed) {
+                        Caption("reviewed widgets from github.com/${store.repo}")
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) { Caption("widgets from github.com/${store.repo}, published without review") }
+                            // What was installed from it stays.
+                            BracketAction("remove", Palette.red) {
+                                market.removeStore(store)
+                                onStore()
+                                scope.launch { market.refresh() }
+                            }
+                        }
+                    }
                     when {
                         market.loading && market.entries.isEmpty() -> BasicText("loading…", style = Mono.copy(color = Palette.muted))
                         market.error != null && market.entries.isEmpty() -> BasicText(market.error.orEmpty(), style = Mono.copy(color = Palette.red))
@@ -254,6 +276,56 @@ private const val INSTALLED = "installed"
 
 @Composable
 private fun Caption(text: String) = BasicText(text, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+
+/** The stores to pick from, the current one highlighted, then `+ store`, which adds one by its repo once its catalog loads. */
+@Composable
+private fun StoreChips(
+    market: Market,
+    onStore: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var adding by remember { mutableStateOf(false) }
+    var input by remember { mutableStateOf("") }
+    var checking by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Row(Modifier.bleed(PanelPadding).horizontalScroll(rememberScrollState()).padding(horizontal = PanelPadding), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (store in market.stores) {
+            Chip(store.repo, selected = store == market.current) {
+                market.select(store)
+                onStore()
+                scope.launch { market.refresh() }
+            }
+        }
+        Chip("+ store", selected = adding) {
+            adding = !adding
+            error = null
+        }
+    }
+    if (adding) {
+        val add: () -> Unit = {
+            if (!checking) {
+                checking = true
+                error = null
+                scope.launch {
+                    error = market.addStore(input)
+                    checking = false
+                    if (error == null) {
+                        adding = false
+                        input = ""
+                        onStore()
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SearchField(input, { input = it }, onGo = add, placeholder = "owner/repo or URL", modifier = Modifier.weight(1f))
+            BracketAction(if (checking) "checking…" else "add", Palette.accent, add)
+        }
+        error?.let { BasicText(it, style = Mono.copy(color = Palette.red, fontSize = TextSize.Small)) }
+    }
+    Spacer(Modifier.height(8.dp))
+}
 
 @Composable
 private fun Chip(
@@ -319,7 +391,7 @@ private fun Card(
     onOpen: () -> Unit,
 ) {
     val preview = rememberPreview(market, e, theme)
-    val busy = market.busy[e.id]
+    val busy = market.busy(e)
     val update = market.hasUpdate(e)
     val installed = market.installedVersion(e) != null
     Column(
@@ -371,7 +443,7 @@ private fun Detail(
     val installed = market.installedVersion(e)
     val update = market.hasUpdate(e)
     val preview = rememberPreview(market, e, theme)
-    val busy = market.busy[e.id]
+    val busy = market.busy(e)
     // Keyed by the widget, so picking another one beside the grid starts its page at the top.
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (showBack) {
