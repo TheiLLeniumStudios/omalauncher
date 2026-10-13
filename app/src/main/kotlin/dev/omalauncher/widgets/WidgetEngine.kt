@@ -31,6 +31,8 @@ import dev.omalauncher.widgets.market.Review
 import dev.omalauncher.widgets.market.Shared
 import dev.omalauncher.widgets.runtime.Location
 import dev.omalauncher.widgets.runtime.WidgetInstance
+import dev.omalauncher.widgets.runtime.WithoutLocation
+import dev.omalauncher.widgets.runtime.mayLocate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -410,7 +412,7 @@ class WidgetEngine(
             val inst =
                 WidgetInstance(
                     program,
-                    services,
+                    if (mayLocate(name, name in bundledFiles, isOwnWidget(spec))) services else WithoutLocation(services),
                     { message -> writeError(spec.file, message, append = true) },
                     File(stateDir, "$name.json"),
                     onScreen = { open -> if (open) openScreen = name else if (openScreen == name) openScreen = null },
