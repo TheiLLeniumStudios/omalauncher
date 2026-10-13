@@ -147,6 +147,13 @@
             android:label="Pi"
             android:targetActivity=".LinuxWindowActivity" />
 
+        <activity-alias
+            android:name=".OmpWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_omp"
+            android:label="oh-my-pi"
+            android:targetActivity=".LinuxWindowActivity" />
+
         <activity
             android:name=".FilesActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"

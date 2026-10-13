@@ -20,6 +20,8 @@ data class Agent(
     val description: String,
     /** mise package spec. */
     val pkg: String,
+    /** How every launch starts it, before any prompt: the bin, plus flags it always needs. */
+    val launch: String = bin,
 ) {
     /** Its activity alias in the manifest (cursor-agent -> CursorAgentWindow), so Recents names its window after it. */
     val windowAlias get() = bin.split('-').joinToString("") { it.replaceFirstChar(Char::uppercase) } + "Window"
@@ -37,13 +39,15 @@ val AGENTS =
         Agent("cursor-agent", "Cursor CLI", "Cursor's agent for the terminal", "cursor-agent"),
         Agent("agy", "Antigravity", "Google's Gemini coding agent", "antigravity-cli"),
         Agent("pi", "Pi", "Minimal, extensible coding agent", "pi"),
+        // In ~ omp moves itself to a temp dir unless told not to; the launcher starts agents in ~, where AGENTS.md is.
+        Agent("omp", "oh-my-pi", "Pi with the IDE wired in: LSP, browser, subagents", "oh-my-pi", launch = "omp --allow-home"),
     )
 
 /**
  * Starts [agentBin] with a first prompt; OpenCode takes it as --prompt, the others as an argument.
  * [readOnly], for reading something untrusted: Claude Code starts in plan mode, where it can read but not
- * run commands or change files whatever the user's settings say. The others have no flag for that we can
- * rely on inside proot, and only have the prompt.
+ * run commands or change files whatever the user's settings say; oh-my-pi gets only its read-only tools.
+ * The others have no flag for that we can rely on inside proot, and only have the prompt.
  */
 fun agentInvocation(
     agentBin: String,
@@ -51,10 +55,12 @@ fun agentInvocation(
     readOnly: Boolean = false,
 ): String {
     val quoted = shellQuote(prompt)
+    val launch = AGENTS.firstOrNull { it.bin == agentBin }?.launch ?: agentBin
     return when {
-        agentBin == "opencode" -> "$agentBin --prompt $quoted"
-        agentBin == "claude" && readOnly -> "$agentBin --permission-mode plan $quoted"
-        else -> "$agentBin $quoted"
+        agentBin == "opencode" -> "$launch --prompt $quoted"
+        agentBin == "claude" && readOnly -> "$launch --permission-mode plan $quoted"
+        agentBin == "omp" && readOnly -> "$launch --tools read,grep,glob $quoted"
+        else -> "$launch $quoted"
     }
 }
 
@@ -140,7 +146,7 @@ class AgentStore(
     fun managed(): List<Managed> =
         installed.map { agent ->
             Managed.text(File(proot.applications, "agent-${agent.bin}.desktop"), Policy.Owned) {
-                "[Desktop Entry]\nType=Application\nName=${agent.name}\nTerminal=true\nExec=${agent.bin}\nIcon=${bundledIcon("agent-${agent.bin}")}\n"
+                "[Desktop Entry]\nType=Application\nName=${agent.name}\nTerminal=true\nExec=${agent.launch}\nIcon=${bundledIcon("agent-${agent.bin}")}\n"
             }
         } + codexConfig()
 

@@ -21,6 +21,7 @@ agent in the launcher, which is not affiliated with or endorsed by any of them.
 | `agent-grok` | Grok | xAI | @lobehub/icons (MIT) |
 | `agent-opencode` | opencode | opencode | @lobehub/icons (MIT) |
 | `agent-pi` | Pi | pi.dev | drawn for Omalauncher, a π in the colors of Pi's mark |
+| `agent-omp` | oh-my-pi | Stencil Labs | the π-with-plug mark from [oh-my-pi](https://github.com/can1357/oh-my-pi)'s `assets/icon.svg` (MIT) |
 | `agent-crush` | Crush | Charm | redrawn from Charm's logo |
 
 ## Fonts
