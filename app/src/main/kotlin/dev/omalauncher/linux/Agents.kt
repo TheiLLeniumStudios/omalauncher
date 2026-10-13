@@ -60,6 +60,8 @@ fun agentInvocation(
         agentBin == "opencode" -> "$launch --prompt $quoted"
         agentBin == "claude" && readOnly -> "$launch --permission-mode plan $quoted"
         agentBin == "omp" && readOnly -> "$launch --tools read,grep,glob $quoted"
+        agentBin == "agy" && readOnly -> "$launch --mode plan -i $quoted"
+        agentBin == "agy" -> "$launch -i $quoted"
         else -> "$launch $quoted"
     }
 }

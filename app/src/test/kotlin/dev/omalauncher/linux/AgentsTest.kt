@@ -30,4 +30,10 @@ class AgentsTest {
         val tools = Regex("--tools (\\S+)").find(agentInvocation("omp", "review", readOnly = true))!!.groupValues[1].split(',')
         assertEquals(listOf("read", "grep", "glob"), tools)
     }
+
+    /** agy rejects a positional prompt and drops to a shell; its first prompt goes through -i. */
+    @Test fun agyTakesThePromptWithDashI() {
+        assertEquals("agy -i 'hi'", agentInvocation("agy", "hi"))
+        assertEquals("agy --mode plan -i 'hi'", agentInvocation("agy", "hi", readOnly = true))
+    }
 }
