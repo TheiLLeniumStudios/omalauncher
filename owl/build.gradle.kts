@@ -7,7 +7,7 @@ plugins {
 kotlin { jvmToolchain(17) }
 
 /** The `owl` command line (check, review, index): its own source set, so the app's copy of the library doesn't carry it. */
-val cli: SourceSet by sourceSets.creating {
+val cli: SourceSet = sourceSets.create("cli") {
     compileClasspath += sourceSets.main.get().output
     runtimeClasspath += sourceSets.main.get().output
 }
