@@ -19,6 +19,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.zIndex
+import dev.omalauncher.widgets.movedBy
 import dev.omalauncher.widgets.reorderCells
 import dev.omalauncher.widgets.Cell
 import dev.omalauncher.widgets.Folder
@@ -481,11 +482,13 @@ internal fun HomeGrid(
                                 val y = g.rowLine(at - hold).coerceIn(0, (g.rows - cell.h).coerceAtLeast(0))
                                 val next = Cell(x, y, cell.w, cell.h)
                                 if (plannedPage != page || plannedCell != next) {
+                                    val fitted = others.associate { it.first.key to it.second }
                                     val plan = reorderCells(
-                                        others.associate { it.first.key to it.second }, next, g.cols, g.rows,
+                                        fitted, next, g.cols, g.rows,
                                         before = page == from && y * g.cols + x > cell.y * g.cols + cell.x,
                                     )
-                                    arrange.displaced = plan ?: emptyMap()
+                                    // Only the tiles that make room; the rest keep their saved cells (see Grid.fit).
+                                    arrange.displaced = plan?.let { movedBy(it, fitted) } ?: emptyMap()
                                     arrange.preview = next.takeIf { plan != null }
                                     plannedPage = page
                                     plannedCell = next

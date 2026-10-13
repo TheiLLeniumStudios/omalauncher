@@ -52,3 +52,12 @@ internal fun reorderCells(
     if (plan.any { (key, cell) -> plan.any { (other, c) -> other != key && c.overlaps(cell) } }) return null
     return plan
 }
+
+/**
+ * The part of [plan] a drop saves: the tiles it moved off their [fitted] cells. The others keep their saved cells,
+ * which [fitted] may have clamped to a smaller grid only for display.
+ */
+internal fun movedBy(
+    plan: Map<String, Cell>,
+    fitted: Map<String, Cell>,
+): Map<String, Cell> = plan.filter { (key, cell) -> fitted[key] != cell }
