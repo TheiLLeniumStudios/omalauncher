@@ -2,7 +2,9 @@ package dev.omalauncher.files
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.os.CancellationSignal
@@ -127,8 +129,7 @@ class ArchDocsProvider : DocumentsProvider() {
     /** SAF clients learn about changes by us notifying them; both the parent's listing and the row itself. */
     private fun notify(parentDocumentId: String) {
         val context = requireNotNull(context)
-        // Per application id, as in the manifest, so the Play build and the fork can be installed side by side.
-        val authority = context.packageName + ".arch.documents"
+        val authority = authority(context)
         context.contentResolver.notifyChange(DocumentsContract.buildChildDocumentsUri(authority, parentDocumentId), null)
         context.contentResolver.notifyChange(DocumentsContract.buildDocumentUri(authority, parentDocumentId), null)
     }
@@ -147,14 +148,29 @@ class ArchDocsProvider : DocumentsProvider() {
             context.packageManager.getComponentEnabledSetting(ComponentName(context, ArchDocsProvider::class.java)) ==
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED
 
+        /**
+         * Turns access on, or off for good: disabled (not back to the manifest's default) so Android drops connected
+         * clients, and every grant apps were given is revoked, so turning it on again doesn't bring them back.
+         */
         fun setEnabled(
             context: Context,
             on: Boolean,
-        ) = context.packageManager.setComponentEnabledSetting(
-            ComponentName(context, ArchDocsProvider::class.java),
-            if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DEFAULT,
-            PackageManager.DONT_KILL_APP,
-        )
+        ) {
+            context.packageManager.setComponentEnabledSetting(
+                ComponentName(context, ArchDocsProvider::class.java),
+                if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+            if (!on) {
+                context.revokeUriPermission(
+                    Uri.parse("content://${authority(context)}/"),
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+        }
+
+        /** Per application id, as in the manifest, so the Play build and the fork can be installed side by side. */
+        private fun authority(context: Context) = context.packageName + ".arch.documents"
 
         // The SDK hides its own projection arrays; these are what the methods use.
         private val rootProjection =
