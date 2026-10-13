@@ -69,4 +69,13 @@ class GridReorderTest {
         valid(cells, target, reorderCells(cells, target, 6, 4), 6, 4)
         assertEquals(Cell(3, 0, 3, 2), reorderCells(cells, target, 6, 4)!!["b"])
     }
+
+    /** Saved cells are for the widest grid; a drop on a narrower one only saves the tiles it actually moved. */
+    @Test fun dropOnASmallerGridLeavesUntouchedTilesAlone() {
+        // "far" is saved at x=4 on a 6-wide grid; a 4-wide grid shows it fitted to x=2.
+        val fitted = mapOf("near" to Cell(0, 0, 1, 1), "far" to Cell(2, 2, 2, 1))
+        val target = Cell(0, 0, 1, 1)
+        val plan = reorderCells(fitted, target, 4, 4)!!
+        assertEquals(setOf("near"), movedBy(plan, fitted).keys)
+    }
 }
