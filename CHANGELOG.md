@@ -12,6 +12,8 @@ Dates are when the build was uploaded to Play.
   30 minutes for its next interval.
 - Ask for local network access (target SDK 37): Linux and widgets can reach
   LAN hosts again (Cast, printers, `http://192.168.x`, …).
+- The Arch files are open to every Android app: file managers, editors and
+  Open/Save dialogs can browse, read and edit them through SAF.
 
 ## 0.7.0 (versionCode 12) – 2026-10-13
 
