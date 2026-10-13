@@ -17,6 +17,10 @@ Dates are when the build was uploaded to Play.
 - Websites installed from a browser (Install app, or Add to home screen) show up
   on the home screen and in the app drawer, like other apps' shortcuts to home.
   Browsers didn't offer to install them before.
+- The strip above the bar can list the apps you picked (the ones on your home
+  screen, folders included) instead of the ones you opened lately: style ›
+  home screen › bar apps › picked, or `home.picked-apps` in style.toml. In that
+  mode, an app's long press can remove it from the bar.
 
 ## 0.7.0 (versionCode 12) – 2026-10-13
 

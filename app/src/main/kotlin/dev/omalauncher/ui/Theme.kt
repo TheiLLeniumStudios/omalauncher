@@ -110,6 +110,9 @@ object LauncherStyle {
     /** The strip of recently used apps above the bar on home. */
     val recentApps get() = style[Style.RECENT_APPS]
 
+    /** The strip lists the pinned apps instead of the recently used ones, so only picked apps show. */
+    val pinnedApps get() = style[Style.PICKED_APPS]
+
     /** The outline of tiles, the prompt bar and the rails. */
     val tileBorder: Color get() = color(style[Style.TILE_BORDER], Palette.border)
 
