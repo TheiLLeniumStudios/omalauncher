@@ -65,8 +65,9 @@ import java.io.File
  * - as a QR code and a link (widgets/market/Share.kt): another phone scans the code and its launcher
  *   shows what the widget runs before adding it; Omarchy's Widgets app takes the same link. The whole
  *   file is in the link, after the `#`, so nothing is uploaded anywhere.
- * - to the widget store, for everyone: as an issue from the browser (widgets/market/Submit.kt),
- *   or [onPublish] hands it to the default agent, which opens a pull request and can add previews too.
+ * - to a widget store: the built-in one, for everyone, as an issue from the browser (widgets/market/Submit.kt),
+ *   or [onPublish] hands it to the default agent, which opens a pull request and can add previews too;
+ *   one of the user's own [stores], where the agent pushes it straight away.
  *   Null for a widget that isn't the user's own (from the store, or shared with them).
  *
  * [onCheck] has the default agent look for keys, tokens and anything personal in it first.
@@ -74,7 +75,8 @@ import java.io.File
 @Composable
 fun ShareWidgetScreen(
     spec: WidgetSpec,
-    onPublish: (() -> Unit)?,
+    stores: List<Store>,
+    onPublish: ((Store) -> Unit)?,
     onCheck: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -203,7 +205,12 @@ fun ShareWidgetScreen(
                 )
                 if (text != null) StoreIssue(spec, text)
                 BasicText("Or a pull request from your agent, which can add a preview too:", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
-                BracketAction("create pull request with agent", Palette.accent, onPublish)
+                BracketAction("create pull request with agent", Palette.accent) { onPublish(Store.BUILT_IN) }
+                val own = stores.filterNot { it.reviewed }
+                if (own.isNotEmpty()) {
+                    BasicText("Or straight into a store of yours, without review:", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                    for (store in own) BracketAction("publish to ${store.repo} with agent", Palette.accent) { onPublish(store) }
+                }
             }
         }
     }

@@ -309,16 +309,17 @@ private fun ThemesOverlay(
     state.sharing?.let { spec ->
         ShareWidgetScreen(
             spec,
+            runtime.widgets.market.stores,
             // Only your own: a widget from the store or from someone else isn't yours to submit.
             onPublish =
                 if (!runtime.widgets.isOwnWidget(spec)) {
                     null
                 } else {
-                    {
+                    { store ->
                         state.sharing = null
-                        // The default agent opens a pull request (or an issue) on the store repo.
+                        // The default agent opens a pull request (or an issue) on the built-in store, or pushes to the user's own.
                         val agent = runtime.agents.default
-                        if (agent == null) state.agentsOpen = true else runtime.terminal(publishWidgetCommand(agent.bin, spec), "Publish ${spec.name}", agent)
+                        if (agent == null) state.agentsOpen = true else runtime.terminal(publishWidgetCommand(agent.bin, spec, store), "Publish ${spec.name}", agent)
                     }
                 },
             // Closes the screen: what the agent changes would be shared from a fresh one.
