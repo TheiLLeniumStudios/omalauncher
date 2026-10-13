@@ -1,6 +1,7 @@
 package dev.omalauncher.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -48,6 +49,20 @@ import java.nio.file.attribute.BasicFileAttributes
 internal fun needsLocalNetworkPermission(sdkInt: Int, granted: Boolean): Boolean =
     sdkInt >= Build.VERSION_CODES.CINNAMON_BUN && !granted
 
+/** In the launcher's preferences: local network access was asked for, at the Linux install or from home. */
+internal const val LOCAL_NETWORK_ASKED = "local_network_asked"
+
+/**
+ * Whether home asks for local network access: Linux installed before the install asked for it (or it was refused
+ * there) still needs it for LAN hosts. Once asked here, a refusal stands; the Linux install still asks.
+ */
+internal fun asksLocalNetworkAtHome(
+    sdkInt: Int,
+    granted: Boolean,
+    linuxInstalled: Boolean,
+    askedBefore: Boolean,
+): Boolean = linuxInstalled && !askedBefore && needsLocalNetworkPermission(sdkInt, granted)
+
 /**
  * Everything about the optional Linux system in one place: what it adds and
  * an install button, the install's progress, or, once installed, its size
@@ -80,7 +95,13 @@ fun LinuxScreen(
 @Composable
 fun rememberLinuxInstall(runtime: Runtime): (List<String>) -> Unit {
     val context = LocalContext.current
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
+    val ask =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { answers ->
+            // Asked here, home doesn't ask again (see asksLocalNetworkAtHome).
+            if (Manifest.permission.ACCESS_LOCAL_NETWORK in answers) {
+                context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit().putBoolean(LOCAL_NETWORK_ASKED, true).apply()
+            }
+        }
     return { bins ->
         runtime.installLinux(AGENTS.filter { it.bin in bins })
         val need = buildList {

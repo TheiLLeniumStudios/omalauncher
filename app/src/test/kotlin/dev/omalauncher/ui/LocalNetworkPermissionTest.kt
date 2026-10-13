@@ -24,4 +24,13 @@ class LocalNetworkPermissionTest {
         assertTrue(needsLocalNetworkPermission(sdkInt = 38, granted = false))
         assertFalse(needsLocalNetworkPermission(sdkInt = 38, granted = true))
     }
+
+    /** Linux installed before this asked at install time: home asks once, then a refusal stands. */
+    @Test fun homeAsksInstalledLinuxOnce() {
+        assertTrue(asksLocalNetworkAtHome(sdkInt = 37, granted = false, linuxInstalled = true, askedBefore = false))
+        assertFalse(asksLocalNetworkAtHome(sdkInt = 37, granted = false, linuxInstalled = true, askedBefore = true))
+        assertFalse(asksLocalNetworkAtHome(sdkInt = 37, granted = false, linuxInstalled = false, askedBefore = false))
+        assertFalse(asksLocalNetworkAtHome(sdkInt = 37, granted = true, linuxInstalled = true, askedBefore = false))
+        assertFalse(asksLocalNetworkAtHome(sdkInt = 36, granted = false, linuxInstalled = true, askedBefore = false))
+    }
 }
