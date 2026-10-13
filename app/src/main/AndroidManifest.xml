@@ -12,8 +12,6 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
-    <!-- "Display over other apps" lets the lock cover start while another app is in front (LockCoverActivity). -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-feature
         android:name="android.software.live_wallpaper"
