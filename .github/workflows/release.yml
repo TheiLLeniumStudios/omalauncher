@@ -16,6 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The full history: the version code counts its commits.
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -63,8 +66,9 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
 
+      # Numbered like apk.yml's edge builds, so a release installs over them.
       - name: Build
-        run: ./gradlew :app:assembleRelease
+        run: ./gradlew :app:assembleRelease -PciCommits=$(git rev-list --count HEAD)
 
       # Checksum and provenance, so a sideloaded APK can be checked against what CI built:
       # sha256sum -c SHA256SUMS, or gh attestation verify <apk> -R SimonSchubert/omalauncher.

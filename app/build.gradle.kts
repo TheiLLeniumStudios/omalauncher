@@ -20,10 +20,12 @@ android {
         targetSdk = 37
         versionCode = 12
         versionName = "0.7.0"
-        // Fork CI (apk.yml): each edge build newer than the last and than upstream's own, named after its commit.
-        providers.gradleProperty("ciRun").orNull?.let { run ->
-            this.versionCode = versionCode!! * 100_000 + run.toInt()
-            versionName += "-" + providers.gradleProperty("ciSha").get()
+        // Fork CI (apk.yml, release.yml): numbered by the commits on the branch, so a commit builds the same
+        // number in either workflow, every build is newer than the last and than upstream's own. Edge builds
+        // also carry their commit in the name.
+        providers.gradleProperty("ciCommits").orNull?.let { commits ->
+            this.versionCode = versionCode!! * 100_000 + commits.toInt()
+            providers.gradleProperty("ciSha").orNull?.let { versionName += "-$it" }
         }
         ndk { abiFilters += "arm64-v8a" }
     }
