@@ -246,6 +246,13 @@ class Shortcuts(
         remove(key)
     }
 
+    /** Takes [app] off the home screen, cell and all, as removing it from the bar in picked mode does. */
+    fun removeAndroid(app: AndroidApp) {
+        val key = "app:" + app.key
+        layout.remove(key)
+        remove(key)
+    }
+
     private fun keyOf(shortcut: AndroidShortcut) = "shortcut:" + shortcut.key
 
     /** Pinning an app that's already on the home screen moves it to [Shortcut.page], out of its folder. */
