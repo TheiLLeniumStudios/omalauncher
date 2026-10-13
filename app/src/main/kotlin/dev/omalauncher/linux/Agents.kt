@@ -139,8 +139,13 @@ class AgentStore(
     var installed by mutableStateOf<List<Agent>>(emptyList())
         private set
 
+    /** Bins of the installed agents this screen can remove: those mise installed. One only in ~/.local/bin is the user's. */
+    var removable by mutableStateOf<Set<String>>(emptySet())
+        private set
+
     private fun refresh() {
         installed = AGENTS.filter { isInstalled(it) }
+        removable = AGENTS.filter { Files.exists(File(shims, it.bin).toPath(), LinkOption.NOFOLLOW_LINKS) }.mapTo(HashSet()) { it.bin }
     }
 
     /** The agent the launcher opens for prompts and widget work: the picked one, else the first installed in Omarchy's order. */
@@ -174,19 +179,9 @@ class AgentStore(
         onChanged()
     }
 
-    /**
-     * Removes an agent this screen installed. An agent with its own installer is left where it is:
-     * its command in ~/.local/bin may be the user's own, so the launcher only says so.
-     */
+    /** Removes an agent mise installed (see [removable]); one in ~/.local/bin stays, as it's the user's. */
     suspend fun remove(agent: Agent) =
-        run(agent, "removing") {
-            if (agent.install != null) {
-                "echo '${agent.name} is installed outside the launcher (or by hand); " +
-                    "remove it where it lives: ~/.local/bin/${agent.bin}'"
-            } else {
-                "mise unuse -g ${shellQuote(agent.pkg)} && mise prune -y"
-            }
-        }
+        run(agent, "removing") { "mise unuse -g ${shellQuote(agent.pkg)} && mise prune -y" }
             .also {
                 refresh()
                 onChanged()
