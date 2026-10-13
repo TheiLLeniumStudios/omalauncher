@@ -1,5 +1,8 @@
 package dev.omalauncher.ui
 
+import android.app.role.RoleManager
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -284,7 +287,32 @@ private fun BackgroundSection(
         }
     }
     StyleOption("lock cover", listOf("off", "on"), if (store.lockCoverEnabled) 1 else 0) { store.setLockCover(it == 1) }
-    OptionHint("shows over the lock screen while omalauncher is your home app; your PIN or fingerprint still unlocks")
+    // Android freezes a launcher that isn't home: it never hears the screen go off, and couldn't start the cover anyway.
+    val roles = remember { context.getSystemService(RoleManager::class.java) }
+    var isHome by remember { mutableStateOf(roles.isRoleHeld(RoleManager.ROLE_HOME)) }
+    val askHome =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            isHome = roles.isRoleHeld(RoleManager.ROLE_HOME)
+            // Android stops offering the chooser after a refusal or two; its default-apps page always works.
+            if (!isHome) runCatching { context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
+        }
+    if (store.lockCoverEnabled && !isHome) {
+        BasicText(
+            "omalauncher isn't your home app, so the cover won't show",
+            Modifier.padding(start = LabelWidth),
+            style = Mono.copy(color = Palette.red, fontSize = TextSize.Small),
+        )
+        BasicText(
+            "[ make omalauncher your home app ]",
+            Modifier
+                .padding(start = LabelWidth)
+                .clickable { askHome.launch(roles.createRequestRoleIntent(RoleManager.ROLE_HOME)) }
+                .padding(vertical = 4.dp),
+            style = Mono.copy(color = Palette.accent),
+        )
+    } else {
+        OptionHint("shows over the lock screen while omalauncher is your home app; your PIN or fingerprint still unlocks")
+    }
 }
 
 /** The terminals' font and the size they open at, on top of Android's font size; see [TerminalFont]. */
