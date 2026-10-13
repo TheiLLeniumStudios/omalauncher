@@ -172,6 +172,18 @@ class AndroidAppCatalog(
     var privateProfiles by mutableStateOf(emptySet<Long>())
         private set
 
+    /** The users of [privateProfiles], so checks on hot paths (home, notifications) need no system call. */
+    private var privateUsers = emptySet<UserHandle>()
+
+    /** Every other profile the last load saw; [refresh] reloads when that changes. */
+    private var knownProfiles = emptySet<Long>()
+
+    /** Set by the first load; until then no profile counts as outside Private Space. */
+    private var loaded by mutableStateOf(false)
+
+    /** userTypes already logged as unknown. */
+    private val unknownUserTypes = HashSet<String>()
+
     private val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
     var privateShown by mutableStateOf(prefs.getBoolean(PRIVATE_SHOWN, true))
         private set
@@ -267,10 +279,25 @@ class AndroidAppCatalog(
         reload()
     }
 
-    /** Recheck profile visibility and quiet mode after a role change or return from system authentication. */
+    /**
+     * Rechecks after returning home (a role change, system authentication, a lock in settings): reloads only when the
+     * profiles or Private Space's lock changed, and drops private apps only when it locked.
+     */
     fun refresh() {
-        invalidatePrivate()
-        reload()
+        scope.launch {
+            val me = Process.myUserHandle()
+            val (locked, changed) =
+                withContext(Dispatchers.IO) {
+                    val serials =
+                        runCatching { launcherApps.profiles }.getOrDefault(emptyList()).filter { it != me }
+                            .mapNotNull { runCatching { userManager.getSerialNumberForUser(it) }.getOrNull()?.takeIf { s -> s >= 0 } }
+                            .toSet()
+                    val lockChanged = privateProfiles.any { p -> userFor(p)?.let(::quiet) != (p in pausedProfiles) }
+                    lockChanged to (lockChanged || serials != knownProfiles)
+                }
+            if (locked) invalidatePrivate()
+            if (changed) reload()
+        }
     }
 
     /**
@@ -295,7 +322,7 @@ class AndroidAppCatalog(
             return
         }
         // Home shortcuts cannot open Private Space, including stale persisted shortcuts.
-        if (!outsidePrivate(user)) return
+        if (inPrivateSpace(user)) return
         open(component, user)
     }
 
@@ -328,6 +355,8 @@ class AndroidAppCatalog(
             Log.w(TAG, "cannot open shortcut $ref: its profile $profile is gone")
             return
         }
+        // As for pinned apps: nothing on home opens Private Space.
+        if (inPrivateSpace(user)) return
         open(ref, user)
     }
 
@@ -464,26 +493,24 @@ class AndroidAppCatalog(
 
     private fun accessible(user: UserHandle): Boolean {
         if (user == Process.myUserHandle()) return true
-        return when (profileKind(user)) {
-            ProfileKind.Private -> privateShown && !quiet(user)
-            null -> false
-            else -> true
-        }
+        return user !in privateUsers || (privateShown && !quiet(user))
     }
 
-    /** Only ordinary profiles may feed home shortcuts and widget data. */
-    fun outsidePrivate(user: UserHandle): Boolean =
-        user == Process.myUserHandle() || profileKind(user)?.let { it != ProfileKind.Private } == true
+    /** Only ordinary profiles may feed home shortcuts and widget data; before the first load, none but ours does. */
+    fun outsidePrivate(user: UserHandle): Boolean = user == Process.myUserHandle() || (loaded && user !in privateUsers)
 
-    fun outsidePrivate(profile: Long?): Boolean =
-        profile == null || userFor(profile)?.let(::outsidePrivate) == true
+    fun outsidePrivate(profile: Long?): Boolean = profile == null || (loaded && profile !in privateProfiles)
+
+    /** Whether [user] is Private Space, asked of the system now: for a one-off check that can't wait for a load. */
+    fun inPrivateSpace(user: UserHandle): Boolean =
+        user != Process.myUserHandle() && (user in privateUsers || profileKind(user, known = false) == ProfileKind.Private)
 
     private fun quietState(user: UserHandle): Boolean? = runCatching { userManager.isQuietModeEnabled(user) }.getOrNull()
 
     private fun quiet(user: UserHandle): Boolean = quietState(user) != false
 
-    private fun privateAvailable(app: AndroidApp): Boolean =
-        !lockGate.blocks(app.profile) && profileKind(app.user) == ProfileKind.Private && !quiet(app.user)
+    /** Private apps from the last scan stay usable until Private Space is asked to lock (a lock broadcast restarts the load). */
+    private fun privateAvailable(app: AndroidApp): Boolean = !lockGate.blocks(app.profile)
 
     /** Purges private data before an unavailable-profile broadcast can be followed by another frame. */
     private fun invalidatePrivate() {
@@ -513,7 +540,10 @@ class AndroidAppCatalog(
                 var made = emptyList<Pair<ShortcutInfo?, AndroidShortcut>>()
                 val listed = shortcuts.toList()
                 var privates = emptySet<Long>()
+                var privateHandles = emptySet<UserHandle>()
+                var seen = emptySet<Long>()
                 var confirmedLocked = emptySet<Long>()
+                val wasPrivate = privateProfiles
                 val infos =
                     withContext(Dispatchers.IO) {
                         val me = Process.myUserHandle()
@@ -524,8 +554,8 @@ class AndroidAppCatalog(
                             .flatMap { user ->
                                 val profile = if (user == me) null else runCatching { userManager.getSerialNumberForUser(user) }.getOrNull()?.takeIf { it >= 0 }
                                 if (user != me && profile == null) return@flatMap emptyList()
-                                val kind = if (profile == null) ProfileKind.Personal else profileKind(user)
-                                if (kind == null) return@flatMap emptyList()
+                                val kind = if (profile == null) ProfileKind.Personal else profileKind(user, known = profile in wasPrivate)
+                                if (profile != null) seen += profile
                                 val clone = kind == ProfileKind.Clone
                                 val isPrivate = kind == ProfileKind.Private
                                 val quietMode = if (profile == null) false else quietState(user)
@@ -533,7 +563,10 @@ class AndroidAppCatalog(
                                 if (profile != null && kind == ProfileKind.Private && quietMode == true) confirmedLocked += profile
                                 if (profile != null && clone) clones += profile
                                 if (profile != null && kind == ProfileKind.Work) works += profile
-                                if (profile != null && isPrivate) privates += profile
+                                if (profile != null && isPrivate) {
+                                    privates += profile
+                                    privateHandles += user
+                                }
                                 if (isPrivate && (quietMode != false || lockGate.blocks(profile))) return@flatMap emptyList()
                                 // A paused profile's shortcuts can't be listed; they stay, dimmed like its apps, and opening one resumes it.
                                 // Private Space's stay out, like its apps from home.
@@ -557,6 +590,9 @@ class AndroidAppCatalog(
                 cloneProfiles = clones
                 workProfiles = works
                 privateProfiles = privates
+                privateUsers = privateHandles
+                knownProfiles = seen
+                loaded = true
                 val list = visibleInfos.map { it.second }
                 if (list != apps.toList()) {
                     apps.clear()
@@ -638,15 +674,17 @@ class AndroidAppCatalog(
         return bmp.asImageBitmap() to mask.asImageBitmap()
     }
 
-    /**
-     * Only Android 15 on tells a launcher a profile's kind; before, every profile beside
-     * ours counts as work. A failed or unknown classification on modern Android stays hidden.
-     */
-    private fun profileKind(user: UserHandle): ProfileKind? =
-        classifyProfile(
-            Build.VERSION.SDK_INT,
-            runCatching { if (Build.VERSION.SDK_INT >= 35) launcherApps.getLauncherUserInfo(user)?.userType else null }.getOrNull(),
-        )
+    /** [user]'s kind, as [classifyProfile] reads it; [known] says it was Private Space at the last load. Unknown types are logged once. */
+    private fun profileKind(
+        user: UserHandle,
+        known: Boolean,
+    ): ProfileKind {
+        val type = runCatching { if (Build.VERSION.SDK_INT >= 35) launcherApps.getLauncherUserInfo(user)?.userType else null }.getOrNull()
+        if (type != null && type !in KNOWN_USER_TYPES && synchronized(unknownUserTypes) { unknownUserTypes.add(type) }) {
+            Log.i(TAG, "profile type $type is unknown; its apps are listed as work apps")
+        }
+        return classifyProfile(Build.VERSION.SDK_INT, type, known)
+    }
 
     /**
      * Marks an icon from another profile with [mark] in its corner, and its
