@@ -10,6 +10,8 @@ Dates are when the build was uploaded to Play.
 - The weather tile recovers from airplane mode: offline it keeps the last forecast,
   retries every 30 s while on screen and has a retry button, instead of waiting
   30 minutes for its next interval.
+- Ask for local network access (target SDK 37): Linux and widgets can reach
+  LAN hosts again (Cast, printers, `http://192.168.x`, …).
 
 ## 0.7.0 (versionCode 12) – 2026-10-13
 
