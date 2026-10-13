@@ -21,6 +21,9 @@ Dates are when the build was uploaded to Play.
   screen, folders included) instead of the ones you opened lately: style ›
   home screen › bar apps › picked, or `home.picked-apps` in style.toml. In that
   mode, an app's long press can remove it from the bar.
+- The weather widget uses your phone's location, asked once, instead of guessing
+  it from your IP address, so a VPN no longer moves it; a city you type still wins.
+  Widgets can read it with `android.location` (owl 8).
 
 ## 0.7.0 (versionCode 12) – 2026-10-13
 
