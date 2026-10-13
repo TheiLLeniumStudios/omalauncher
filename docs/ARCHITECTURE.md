@@ -50,13 +50,18 @@ drawing.
 
 Opt-in, in settings › linux. The device node picks the driver. Mali (v10+:
 Pixel 7 and newer, recent MediaTek) uses the pinned PanVK-kbase driver on
-`/dev/mali0`, from zenithblue-oss/panvk-kbase-android. Adreno uses the pinned
-Turnip KGSL driver on `/dev/kgsl-3d0`, the Arch `vulkan-freedreno` package
-from lfdevs/mesa-for-android-container (turnip-26.3.0-devel-20260824). Arch's
-own Mesa talks to DRM, so it would not see `/dev/kgsl-3d0`. Both blobs are
-checked against their sha256 and installed under `/usr/local`, where pacman
-never touches them. Turning one on also installs Mesa and the Vulkan loader
-with pacman. OpenGL is Arch's stock Mesa on top, via zink. Frames still
+`/dev/mali0`, from zenithblue-oss/panvk-kbase-android. Adreno 6xx and newer
+(`/sys/class/kgsl/kgsl-3d0/gpu_model`; if unreadable, the check decides) uses
+the pinned Turnip KGSL driver on `/dev/kgsl-3d0`, the Arch `vulkan-freedreno`
+package from lfdevs/mesa-for-android-container (turnip-26.3.0-devel-20260824).
+Arch's own Mesa talks to DRM, so it would not see `/dev/kgsl-3d0`. Both blobs
+are checked against their sha256 and installed under `/usr/local`, where pacman
+never touches them. Their ICD files go in `/usr/local/lib/omalauncher`, which
+the Vulkan loader doesn't search, so a driver loads only through
+`VK_ICD_FILENAMES`, i.e. only while the GPU is on. The check writes the ICD and
+deletes the ones earlier builds left in the loader's search path, unless a
+pacman package owns them. Turning one on also installs Mesa and the Vulkan
+loader with pacman. OpenGL is Arch's stock Mesa on top, via zink. Frames still
 arrive as wl_shm buffers (`MESA_VK_WSI_DEBUG=sw`), so the compositor is the
 same either way.
 

@@ -47,6 +47,16 @@ internal fun gpuKind(
     else -> null
 }
 
+/**
+ * Turnip drives Adreno 6xx and newer. [gpuModel] is what KGSL reports in
+ * /sys/class/kgsl/kgsl-3d0/gpu_model, like "Adreno722v1". When it can't be
+ * read or parsed, Turnip is still offered and the probe decides.
+ */
+internal fun turnipSupports(gpuModel: String?): Boolean {
+    val model = gpuModel?.let { Regex("""Adreno\D*(\d{3})""").find(it) }?.groupValues?.get(1)?.toInt() ?: return true
+    return model >= 600
+}
+
 internal object GpuDrivers {
     private val basePackages = listOf("mesa", "vulkan-icd-loader", "vulkan-tools", "mesa-utils")
 
@@ -59,7 +69,7 @@ internal object GpuDrivers {
         url = "https://github.com/zenithblue-oss/panvk-kbase-android/releases/download/panvk-kbase-v0.1.0-rc2/libvulkan_panfrost-glibc-aarch64.so",
         blobSha256 = "0b8eaf709cd3559acec72b6fcf3acc24bcdb016bdc998adfedca6ff8eb60c820",
         driverPath = "/usr/local/lib64/libvulkan_panfrost.so",
-        icdPath = "/usr/share/vulkan/icd.d/panfrost_icd.aarch64.json",
+        icdPath = "$ICD_DIR/panfrost_icd.json",
         apiVersion = "1.4.363",
     )
 
@@ -75,7 +85,7 @@ internal object GpuDrivers {
         packageSha256 = "9824514d7180402d936f83f4ad422f338b7df31ff2804eab8a0badb13ee44a77",
         archiveMember = "usr/lib/libvulkan_freedreno.so",
         driverPath = "/usr/local/lib64/libvulkan_freedreno.so",
-        icdPath = "/usr/local/share/vulkan/icd.d/freedreno_icd.aarch64.json",
+        icdPath = "$ICD_DIR/freedreno_icd.json",
         apiVersion = "1.4.359",
     )
 
@@ -88,42 +98,59 @@ internal object GpuDrivers {
     fun installScript(driver: GpuDriver): String = pacmanInstall(driver.packages) + " && " + fetch(driver)
 
     /**
-     * Vulkan finds the GPU through the driver, and OpenGL runs on it through zink.
+     * Writes the ICD, then Vulkan finds the GPU through the driver, and OpenGL runs on it through zink.
      * Offscreen, so no window is needed. The software-rendering variable is unset
      * because checks run while apps still render on the CPU, and that setting would win.
+     * Writing the ICD here also moves it for installs from before [ICD_DIR], whose recheck runs this.
      */
     fun probeScript(driver: GpuDriver): String =
-        "{ unset LIBGL_ALWAYS_SOFTWARE; " + driver.env.joinToString(" ") { "export $it;" } +
+        writeIcd(driver) + " && " +
+            "{ unset LIBGL_ALWAYS_SOFTWARE; " + driver.env.joinToString(" ") { "export $it;" } +
             " vk=\$(timeout 60 vulkaninfo --summary 2>/dev/null); echo \"\$vk\" | grep -E 'deviceName|driverID';" +
             " { echo \"\$vk\" | grep -q ${driver.probeId} || { echo 'Vulkan: the ${driver.label} driver did not load'; false; }; } &&" +
             " { timeout 60 eglinfo -B -p surfaceless 2>/dev/null | grep 'renderer: zink' || { echo 'OpenGL: zink did not start on the GPU'; false; }; }; }"
 
+    /**
+     * Not a directory the Vulkan loader searches, so the driver loads only through
+     * VK_ICD_FILENAMES, i.e. only while the GPU is on, and not one pacman owns.
+     */
+    const val ICD_DIR = "/usr/local/lib/omalauncher"
+
+    /** Where earlier builds wrote the ICDs: the loader found them there even with the GPU off. */
+    val LEGACY_ICDS = listOf(
+        "/usr/share/vulkan/icd.d/panfrost_icd.aarch64.json",
+        "/usr/local/share/vulkan/icd.d/freedreno_icd.aarch64.json",
+    )
+
+    /** Drops the legacy ICDs unless a package owns them: the Mali one sat in pacman's /usr/share. */
+    private fun writeIcd(driver: GpuDriver): String {
+        val icd = """{"file_format_version":"1.0.1","ICD":{"library_path":"${driver.driverPath}","api_version":"${driver.apiVersion}"}}"""
+        return "for f in ${LEGACY_ICDS.joinToString(" ")}; do pacman -Qqo \"\$f\" >/dev/null 2>&1 || rm -f \"\$f\"; done;" +
+            " mkdir -p $ICD_DIR && printf '%s\\n' '$icd' > ${driver.icdPath}"
+    }
+
+    /** The temp files go in a subshell's EXIT trap, so a failed download or hash check doesn't leave them behind. */
     private fun fetch(driver: GpuDriver): String {
         val member = driver.archiveMember
         val pkgSha = driver.packageSha256
         val download = if (member == null || pkgSha == null) {
             """
+            ( trap 'rm -f /tmp/panvk.so' EXIT;
             curl -fL --retry 3 -o /tmp/panvk.so ${driver.url} &&
             echo '${driver.blobSha256}  /tmp/panvk.so' | sha256sum -c - &&
-            install -Dm755 /tmp/panvk.so ${driver.driverPath} && rm -f /tmp/panvk.so
+            install -Dm755 /tmp/panvk.so ${driver.driverPath} )
             """.trimIndent().replace("\n", " ")
         } else {
             """
+            ( trap 'rm -rf /tmp/turnip.pkg.tar.xz /tmp/turnip-driver' EXIT;
             curl -fL --retry 3 -o /tmp/turnip.pkg.tar.xz ${driver.url} &&
             echo '$pkgSha  /tmp/turnip.pkg.tar.xz' | sha256sum -c - &&
             rm -rf /tmp/turnip-driver && mkdir -p /tmp/turnip-driver &&
             tar -xJf /tmp/turnip.pkg.tar.xz -C /tmp/turnip-driver $member &&
             echo '${driver.blobSha256}  /tmp/turnip-driver/$member' | sha256sum -c - &&
-            install -Dm755 /tmp/turnip-driver/$member ${driver.driverPath} &&
-            rm -rf /tmp/turnip.pkg.tar.xz /tmp/turnip-driver
+            install -Dm755 /tmp/turnip-driver/$member ${driver.driverPath} )
             """.trimIndent().replace("\n", " ")
         }
-        val icdDir = driver.icdPath.substringBeforeLast('/')
-        val icd = """{"file_format_version":"1.0.1","ICD":{"library_path":"${driver.driverPath}","api_version":"${driver.apiVersion}"}}"""
-        return """
-            { echo '${driver.blobSha256}  ${driver.driverPath}' | sha256sum -c - 2>/dev/null || { $download; }; } &&
-            mkdir -p $icdDir &&
-            printf '%s\n' '$icd' > ${driver.icdPath}
-            """.trimIndent().replace("\n", " ")
+        return "{ echo '${driver.blobSha256}  ${driver.driverPath}' | sha256sum -c - 2>/dev/null || $download; }"
     }
 }

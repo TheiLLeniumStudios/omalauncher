@@ -27,8 +27,11 @@ class Gpu(
 ) {
     private val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
-    /** The pinned driver for this phone, or null when we have none. */
-    private val spec = gpuKind(File("/dev/mali0").exists(), File("/dev/kgsl-3d0").exists())?.let(GpuDrivers::of)
+    /** The pinned driver for this phone, or null when we have none (no node, or an Adreno older than Turnip supports). */
+    private val spec = gpuKind(
+        hasMali = File("/dev/mali0").exists(),
+        hasKgsl = File("/dev/kgsl-3d0").exists() && turnipSupports(runCatching { File(KGSL_MODEL).readText() }.getOrNull()),
+    )?.let(GpuDrivers::of)
 
     /** The phone has a GPU we have a driver for. */
     val supported = spec != null
@@ -65,8 +68,10 @@ class Gpu(
         if (!supported || !wanted || active || state is JobState.Working) return
         val installed = driverFile ?: return turnOff()
         if (!installed.isFile) return turnOff()
-        if (prefs.getString(CHECKED_BUILD, null) == build) return activate()
-        Log.i(TAG, "system changed since the last GPU check, checking again")
+        val icd = File(proot.rootfs, (spec ?: return).icdPath.removePrefix("/"))
+        // A missing ICD means an install from before GpuDrivers.ICD_DIR: the check below writes it there.
+        if (icd.isFile && prefs.getString(CHECKED_BUILD, null) == build) return activate()
+        Log.i(TAG, "system changed or ICD missing since the last GPU check, checking again")
         if (run("checking", probeScript())) activate()
     }
 
@@ -132,6 +137,7 @@ class Gpu(
         private const val DEVICE = "gpu_device"
 
         private val DEVICE_NAME = Regex("""deviceName\s*=\s*(.+)""")
+        private const val KGSL_MODEL = "/sys/class/kgsl/kgsl-3d0/gpu_model"
 
         /** Today's default: Mesa renders on the CPU (llvmpipe). */
         val SOFTWARE_ENV = listOf("LIBGL_ALWAYS_SOFTWARE=1")
