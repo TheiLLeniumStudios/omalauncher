@@ -7,6 +7,9 @@ Dates are when the build was uploaded to Play.
 ## Unreleased
 
 - Apps pinned from a work profile leave the home screen when the profile is deleted.
+- The weather tile recovers from airplane mode: offline it keeps the last forecast,
+  retries every 30 s while on screen and has a retry button, instead of waiting
+  30 minutes for its next interval.
 
 ## 0.7.0 (versionCode 12) – 2026-10-13
 
@@ -23,7 +26,6 @@ Dates are when the build was uploaded to Play.
   "exec: -v: invalid option".
 
 ## 0.6.0 (versionCode 11) – 2026-10-12
-
 - Apps from a work profile show up next to your own, marked with a briefcase,
   and dimmed while work apps are paused.
 - Cloned apps carry the clone mark instead of the briefcase, from Android 15 on.
