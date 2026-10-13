@@ -20,6 +20,8 @@ window opens as its own Android task, with its own card in Recents.
   launcher and to the Linux apps, plus the community themes from
   [omarchy.org/themes](https://omarchy.org/themes/), or your own in
   `~/.config/omarchy/themes`
+- **Lock cover**, opt-in: a hyprlock-style clock over Android's lock screen, in
+  the theme's colors and wallpaper; your PIN or fingerprint still unlocks
 - **Widgets** written in OWL, a small declarative language you can edit on the
   phone, plus a [widget store](https://github.com/SimonSchubert/omarchy-widgets)
 - **Linux, optional**: pacman and the AUR, Linux apps in their own windows,
