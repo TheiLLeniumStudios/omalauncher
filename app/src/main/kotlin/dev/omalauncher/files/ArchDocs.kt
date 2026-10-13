@@ -4,17 +4,20 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.deleteRecursively
 
 /**
  * Document ids and file mapping for the SAF provider, as plain java.io calls so
  * they can be tested on the JVM without an Android context.
  *
  * The shown root is the guest user's home (/root of the proot'd Arch system).
- * A document id is that root, or a relative path whose segments are individually
- * URL-encoded and joined with '/'. No id is ever built from a raw path, so a
- * name containing '/' or '..' (legal in a Linux filename) can't smuggle a
- * traversal into an id, and decoding is still rejected by [fileFor]'s
- * containment check as a second line of defense.
+ * A document id is "root" for it, or "/" and a path whose segments are each
+ * URL-encoded and joined with '/'. [fileFor] refuses empty, `.` and `..`
+ * segments and decoded ones holding a '/', so an id can only name a file
+ * by going down; what's in which tree is decided on canonical files ([isChild]).
  */
 class ArchDocs(val root: File) {
 
@@ -23,13 +26,42 @@ class ArchDocs(val root: File) {
 
     private val rootCanonical = root.canonicalFile.path
 
-    /** The document id of a file under [root], null for anything outside it (links are resolved, not names taken). */
-    fun docIdFor(file: File): String? {
-        val canonical = file.canonicalFile
-        if (canonical.path == rootCanonical) return rootDocId
-        // A relative result can still climb out when the file merely shares a tmp parent (../sibling).
-        return canonical.relativeToOrNull(root.canonicalFile)?.takeIf { it.path.isNotEmpty() && !it.path.startsWith("..") }?.path
-            ?.split(File.separatorChar)?.joinToString("/") { URLEncoder.encode(it, Charsets.UTF_8) }
+    /** The ids of [parentDocId]'s children, as listing gives them out. */
+    fun childIds(parentDocId: String): List<String> = visibleChildren(fileFor(parentDocId)).map { childDocId(parentDocId, it.name) }
+
+    /** Whether [docId] is [parentDocId] or under it, by where the files really are (links resolved), not by how the ids read. */
+    fun isChild(
+        parentDocId: String,
+        docId: String,
+    ): Boolean {
+        val parent = runCatching { fileFor(parentDocId).canonicalFile }.getOrNull() ?: return false
+        val child = runCatching { fileFor(docId).canonicalFile }.getOrNull() ?: return false
+        return child == parent || child.path.startsWith(parent.path + File.separator)
+    }
+
+    /** The folder [docId] is in; the root's children are in the root. */
+    fun parentOf(docId: String): String = if (docId.lastIndexOf('/') > 0) docId.substringBeforeLast('/') else rootDocId
+
+    /** Deletes [docId], a folder with all it holds; links in it are removed, never followed. */
+    @OptIn(ExperimentalPathApi::class)
+    fun delete(docId: String) {
+        if (docId == rootDocId) throw UnsupportedOperationException("the Linux home can't be deleted")
+        val path = fileFor(docId).toPath()
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) throw FileNotFoundException(docId)
+        path.deleteRecursively()
+    }
+
+    /** Renames [docId] in its folder; returns its new id. */
+    fun rename(
+        docId: String,
+        displayName: String,
+    ): String {
+        if (docId == rootDocId) throw UnsupportedOperationException("the Linux home can't be renamed")
+        val file = fileFor(docId)
+        val target = uniqueChild(file.parentFile ?: throw FileNotFoundException(docId), displayName)
+        // renameTo fails instead of copying across devices; the parent is the same, so that can't happen here.
+        if (!file.renameTo(target)) throw IllegalStateException("could not rename ${file.path} to $displayName")
+        return childDocId(parentOf(docId), target.name)
     }
 
     /** The document id of a child of [parentDocId] named [name], as listing and creation give ids out. */
@@ -37,22 +69,21 @@ class ArchDocs(val root: File) {
         (if (parentDocId == rootDocId) "" else parentDocId) + "/" + URLEncoder.encode(name, Charsets.UTF_8)
 
     /**
-     * The file a document id means, canonicalized. Anything that resolves
-     * outside [root] — a hand-crafted id with ../, or a symlink there — is
-     * rejected, not served: clients can only ever ask back for ids this
-     * provider handed out, and those stay inside.
+     * The file a document id means. An id that isn't one this provider hands out
+     * (empty, `.` or `..` segments, an encoded '/'), or that resolves outside
+     * [root] through a symlink, is rejected, not served.
      */
     fun fileFor(docId: String): File {
+        if (docId == rootDocId) return root
+        if (!docId.startsWith("/")) throw FileNotFoundException("not a document id: $docId")
         val file =
-            if (docId == rootDocId) {
-                root
-            } else {
-                docId.split('/')
-                    .joinToString(File.separator) { URLDecoder.decode(it, Charsets.UTF_8) }
-                    .split(File.separator)
-                    .fold(root) { parent, segment -> File(parent, segment) }
+            docId.substring(1).split('/').fold(root) { parent, segment ->
+                val name = runCatching { URLDecoder.decode(segment, Charsets.UTF_8) }.getOrNull()
+                if (name.isNullOrEmpty() || name == "." || name == ".." || '/' in name) throw FileNotFoundException("not a document id: $docId")
+                File(parent, name)
             }
-        if (file.canonicalFile.path != rootCanonical && !file.canonicalFile.path.startsWith(rootCanonical + File.separator)) {
+        val canonical = file.canonicalFile.path
+        if (canonical != rootCanonical && !canonical.startsWith(rootCanonical + File.separator)) {
             throw FileNotFoundException("not under the Arch root: $docId")
         }
         return file
