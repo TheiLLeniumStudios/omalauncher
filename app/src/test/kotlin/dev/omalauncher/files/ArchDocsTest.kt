@@ -68,6 +68,41 @@ class ArchDocsTest {
         }
     }
 
+    /** A link to a file that doesn't exist yet can't be followed to create it elsewhere, in ~ or outside the Arch root. */
+    @Test fun danglingLinksCannotCreateFilesElsewhere() {
+        val base = tmp.newFolder("base")
+        val root = File(base, "root").apply { mkdirs() }
+        File(root, "Documents").mkdir()
+        File(root, ".ssh").mkdir()
+        File(base, "outside").mkdir()
+        Files.createSymbolicLink(File(root, "Documents/keys").toPath(), Path.of("../.ssh/authorized_keys"))
+        Files.createSymbolicLink(File(root, "Documents/out").toPath(), Path.of("../../outside/x"))
+        Files.createSymbolicLink(File(root, "Documents/gone").toPath(), Path.of("../nowhere"))
+        val docs = ArchDocs(root)
+        val granted = docs.childDocId(docs.rootDocId, "Documents")
+        for (name in listOf("keys", "out", "gone/new.txt")) {
+            val id = name.split('/').fold(granted) { parent, segment -> docs.childDocId(parent, segment) }
+            assertThrows(id, FileNotFoundException::class.java) { docs.fileFor(id) }
+            assertFalse(id, docs.isChild(granted, id))
+        }
+        assertFalse(File(root, ".ssh/authorized_keys").exists())
+        assertFalse(File(base, "outside/x").exists())
+    }
+
+    /** A link elsewhere in ~ that points into a granted folder is not in that folder: deleting or renaming it would act out there. */
+    @Test fun aLinkIntoTheTreeFromOutsideIsNotInIt() {
+        val root = tmp.newFolder("root")
+        File(root, "Documents").mkdir()
+        File(root, "Documents/x").writeText("x")
+        Files.createSymbolicLink(File(root, "foo").toPath(), Path.of("Documents/x"))
+        Files.createSymbolicLink(File(root, "Documents/inside").toPath(), Path.of("x"))
+        val docs = ArchDocs(root)
+        val granted = docs.childDocId(docs.rootDocId, "Documents")
+        assertFalse(docs.isChild(granted, docs.childDocId(docs.rootDocId, "foo")))
+        assertTrue(docs.isChild(granted, docs.childDocId(granted, "inside")))
+        assertTrue(docs.isChild(granted, docs.childDocId(granted, "x")))
+    }
+
     /** Picking the whole home as a tree must give access to what it lists. */
     @Test fun everyListedChildIsInItsParentsTree() {
         val root = tmp.newFolder("root")

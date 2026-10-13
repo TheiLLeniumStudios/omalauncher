@@ -29,15 +29,28 @@ class ArchDocs(val root: File) {
     /** The ids of [parentDocId]'s children, as listing gives them out. */
     fun childIds(parentDocId: String): List<String> = visibleChildren(fileFor(parentDocId)).map { childDocId(parentDocId, it.name) }
 
-    /** Whether [docId] is [parentDocId] or under it, by where the files really are (links resolved), not by how the ids read. */
+    /**
+     * Whether [docId] is [parentDocId] or under it, by where the files really are, not by how the ids read: both the
+     * entry itself (its folder resolved, a link in last place not followed) and what it resolves to must be under the
+     * tree, so a link elsewhere pointing in can't be deleted or renamed through it.
+     */
     fun isChild(
         parentDocId: String,
         docId: String,
     ): Boolean {
+        if (docId == parentDocId) return runCatching { fileFor(docId) }.isSuccess
         val parent = runCatching { fileFor(parentDocId).canonicalFile }.getOrNull() ?: return false
-        val child = runCatching { fileFor(docId).canonicalFile }.getOrNull() ?: return false
-        return child == parent || child.path.startsWith(parent.path + File.separator)
+        val child = runCatching { fileFor(docId) }.getOrNull() ?: return false
+        return isUnder(entryOf(child), parent) && isUnder(child.canonicalFile, parent)
     }
+
+    /** [file] as an entry in its resolved folder, a link in last place left as it is. */
+    private fun entryOf(file: File) = if (file == root) root.canonicalFile else File(file.parentFile.canonicalFile, file.name)
+
+    private fun isUnder(
+        file: File,
+        dir: File,
+    ) = file == dir || file.path.startsWith(dir.path + File.separator)
 
     /** The folder [docId] is in; the root's children are in the root. */
     fun parentOf(docId: String): String = if (docId.lastIndexOf('/') > 0) docId.substringBeforeLast('/') else rootDocId
@@ -70,8 +83,9 @@ class ArchDocs(val root: File) {
 
     /**
      * The file a document id means. An id that isn't one this provider hands out
-     * (empty, `.` or `..` segments, an encoded '/'), or that resolves outside
-     * [root] through a symlink, is rejected, not served.
+     * (empty, `.` or `..` segments, an encoded '/'), one that goes through a link to
+     * nothing (which writing would follow to create its target), or one whose entry
+     * or link target is outside [root], is rejected, not served.
      */
     fun fileFor(docId: String): File {
         if (docId == rootDocId) return root
@@ -80,10 +94,13 @@ class ArchDocs(val root: File) {
             docId.substring(1).split('/').fold(root) { parent, segment ->
                 val name = runCatching { URLDecoder.decode(segment, Charsets.UTF_8) }.getOrNull()
                 if (name.isNullOrEmpty() || name == "." || name == ".." || '/' in name) throw FileNotFoundException("not a document id: $docId")
-                File(parent, name)
+                File(parent, name).also {
+                    val path = it.toPath()
+                    if (Files.isSymbolicLink(path) && !Files.exists(path)) throw FileNotFoundException("a link to nothing: $docId")
+                }
             }
-        val canonical = file.canonicalFile.path
-        if (canonical != rootCanonical && !canonical.startsWith(rootCanonical + File.separator)) {
+        val rootDir = File(rootCanonical)
+        if (!isUnder(entryOf(file), rootDir) || !isUnder(file.canonicalFile, rootDir)) {
             throw FileNotFoundException("not under the Arch root: $docId")
         }
         return file
