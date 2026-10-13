@@ -48,6 +48,13 @@ Hardware keyboard shortcuts: Super+Enter (terminal), Super+Space or
 Super+A (the bar), Super+1..9 (home pages) on the home screen; Super+Enter
 and Super+W (close) in Linux windows.
 
+Widget stores: besides the reviewed built-in one, add others in the widget
+store with `+ store` and their `owner/repo` (or URL). A store is a GitHub repo
+that publishes `index.json` and its widgets to GitHub Pages, like
+[SimonSchubert/omarchy-widgets](https://github.com/SimonSchubert/omarchy-widgets).
+Widgets from added stores aren't reviewed; sharing a widget can push it
+straight to a store of your own.
+
 ## Building
 
 ```sh
