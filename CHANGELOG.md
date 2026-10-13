@@ -14,6 +14,9 @@ Dates are when the build was uploaded to Play.
   LAN hosts again (Cast, printers, `http://192.168.x`, …).
 - The Arch files are open to every Android app: file managers, editors and
   Open/Save dialogs can browse, read and edit them through SAF.
+- Websites installed from a browser (Install app, or Add to home screen) show up
+  on the home screen and in the app drawer, like other apps' shortcuts to home.
+  Browsers didn't offer to install them before.
 
 ## 0.7.0 (versionCode 12) – 2026-10-13
 
@@ -30,6 +33,7 @@ Dates are when the build was uploaded to Play.
   "exec: -v: invalid option".
 
 ## 0.6.0 (versionCode 11) – 2026-10-12
+
 - Apps from a work profile show up next to your own, marked with a briefcase,
   and dimmed while work apps are paused.
 - Cloned apps carry the clone mark instead of the briefcase, from Android 15 on.
