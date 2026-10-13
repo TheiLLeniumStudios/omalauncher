@@ -58,6 +58,11 @@ Hardware keyboard shortcuts: Super+Enter (terminal), Super+Space or
 Super+A (the bar), Super+1..9 (home pages) on the home screen; Super+Enter
 and Super+W (close) in Linux windows.
 
+Linux files in Android apps: settings › linux › **linux files in android apps**
+lists /root under "Omalauncher Linux" in Android's file picker, so file managers
+and editors can open and save there. It's off by default: an app you grant a
+folder can read and change everything in it, dotfiles like `~/.ssh` included.
+
 Widget stores: besides the reviewed built-in one, add others in the widget
 store with `+ store` and their `owner/repo` (or URL). A store is a GitHub repo
 that publishes `index.json` and its widgets to GitHub Pages, like
