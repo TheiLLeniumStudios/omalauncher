@@ -14,7 +14,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "dev.omalauncher"
+        // Fork build: installs next to the Play Store dev.omalauncher instead of over it.
+        applicationId = "dev.omalauncher.fork"
         minSdk = 29
         targetSdk = 37
         versionCode = 12
