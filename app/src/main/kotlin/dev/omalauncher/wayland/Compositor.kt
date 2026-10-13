@@ -176,7 +176,7 @@ class Surface(
         val current = store
         val fresh = current == null || current.width != buffer.width || current.height != buffer.height || current.opaque != opaque
         // A new store is only shown once its pixels are in: never a frame of uninitialized memory.
-        val target = if (fresh) PixelStore(buffer.width, buffer.height, opaque) else current!!
+        val target = if (fresh) PixelStore(buffer.width, buffer.height, opaque) else current
         val rects = if (fresh || full) listOf(intArrayOf(0, 0, buffer.width, buffer.height)) else damageRects(buffer)
         buffer.pool.ref()
         client.defer {

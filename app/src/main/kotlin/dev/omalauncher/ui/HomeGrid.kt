@@ -476,7 +476,7 @@ internal fun HomeGrid(
                             if (groups) {
                                 plannedCell = null
                                 arrange.displaced = emptyMap()
-                                arrange.preview = over?.second
+                                arrange.preview = over.second
                             } else {
                                 val x = g.colLine(at - hold).coerceIn(0, (g.cols - cell.w).coerceAtLeast(0))
                                 val y = g.rowLine(at - hold).coerceIn(0, (g.rows - cell.h).coerceAtLeast(0))
@@ -540,7 +540,7 @@ internal fun HomeGrid(
                         val folderPage = shown.getOrNull(sideOf(arrange.folder, shown))
                         val open = folderPage?.let { p -> itemsOn(p).firstOrNull { it.key == arrange.folder } as? Folder }
                         if (open == null) arrange.folder = null
-                        if (open != null && folderPage != null) {
+                        if (open != null) {
                             val fg = FolderGeometry(size.width, g.height, g.cellW, g.cellH, g.gap, open.apps.size, this)
                             val hit = open.apps.indices.firstOrNull { fg.app(it).has(start) }
                             if (hit == null) {

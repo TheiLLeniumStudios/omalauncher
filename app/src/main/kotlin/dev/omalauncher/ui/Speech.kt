@@ -146,7 +146,7 @@ class Speech(
     @androidx.annotation.RequiresApi(33)
     private fun closestLanguage(support: RecognitionSupport): String? {
         val locale = Locale.getDefault()
-        val wanted = Locale(locale.language, locale.country).toLanguageTag()
+        val wanted = Locale.Builder().setLanguage(locale.language).setRegion(locale.country).build().toLanguageTag()
         val pools =
             if (onDevice) {
                 listOf(support.installedOnDeviceLanguages, support.supportedOnDeviceLanguages, support.onlineLanguages)

@@ -213,6 +213,8 @@ class KeyboardSink(
                 return true
             }
 
+            // ACTION_MULTIPLE and characters are deprecated since API 29, but some IMEs still send text this way.
+            @Suppress("DEPRECATION")
             override fun sendKeyEvent(event: KeyEvent): Boolean {
                 // Text with no key code, which some IMEs send as one event.
                 if (event.action == KeyEvent.ACTION_MULTIPLE && event.keyCode == KeyEvent.KEYCODE_UNKNOWN) {
@@ -242,7 +244,8 @@ class KeyboardSink(
         softKeyboard = true
         requestFocus()
         imm.restartInput(this)
-        imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+        // No SHOW_IMPLICIT: deprecated, and ignored from Android 16 on; this follows a tap, so it's explicit anyway.
+        imm.showSoftInput(this, 0)
     }
 
     fun hide() {

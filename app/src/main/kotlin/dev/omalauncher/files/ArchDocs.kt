@@ -45,7 +45,7 @@ class ArchDocs(val root: File) {
     }
 
     /** [file] as an entry in its resolved folder, a link in last place left as it is. */
-    private fun entryOf(file: File) = if (file == root) root.canonicalFile else File(file.parentFile.canonicalFile, file.name)
+    private fun entryOf(file: File) = if (file == root) root.canonicalFile else File(file.parentFile?.canonicalFile ?: root.canonicalFile, file.name)
 
     private fun isUnder(
         file: File,

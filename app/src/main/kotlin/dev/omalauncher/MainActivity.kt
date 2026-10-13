@@ -59,6 +59,13 @@ class MainActivity : ComponentActivity() {
     /** A permission dialog of ours is up; the next one waits for it. */
     private val asking = MutableStateFlow(false)
 
+    /** Android's chooser for the default home app; whatever the answer, the location dialog may come next. */
+    private val homeRole =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            homeRoleDone.complete(Unit)
+            requestLocation()
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySystemBars(this, Palette.isLight)
@@ -109,14 +116,6 @@ class MainActivity : ComponentActivity() {
         localNetworkPermission.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
     }
 
-    @Suppress("DEPRECATION")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != HOME_ROLE_REQUEST) return
-        homeRoleDone.complete(Unit)
-        requestLocation()
-    }
-
     /** Asks once for the coarse location, only while a widget wants it; a denial is remembered. */
     private fun requestLocation() {
         if (asking.value || !runtime.widgets.location.wanted.value || runtime.widgets.location.granted || locationAsked) return
@@ -133,8 +132,7 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("launcher", MODE_PRIVATE)
         if (prefs.getBoolean("home_role_asked", false)) return false
         prefs.edit().putBoolean("home_role_asked", true).apply()
-        @Suppress("DEPRECATION")
-        startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_HOME), HOME_ROLE_REQUEST)
+        homeRole.launch(roles.createRequestRoleIntent(RoleManager.ROLE_HOME))
         return true
     }
 
@@ -235,9 +233,5 @@ class MainActivity : ComponentActivity() {
             else -> return false
         }
         return true
-    }
-
-    private companion object {
-        const val HOME_ROLE_REQUEST = 1
     }
 }

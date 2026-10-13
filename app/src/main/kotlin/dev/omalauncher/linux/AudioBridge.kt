@@ -6,7 +6,9 @@ import android.media.AudioTrack
 import android.os.SystemClock
 import android.util.Log
 import java.io.File
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
+import kotlin.concurrent.withLock
 
 private const val TAG = "audio"
 private const val RATE = 48000
@@ -35,7 +37,8 @@ class AudioBridge(
         set-default-sink android
         """.trimIndent() + "\n"
 
-    private val lock = Object()
+    private val lock = ReentrantLock()
+    private val playback = lock.newCondition()
     private var playing = false
 
     @Volatile
@@ -120,11 +123,11 @@ class AudioBridge(
                         if (n < 0) break
                         if (n == 0) continue
                         lastData = SystemClock.uptimeMillis()
-                        synchronized(lock) {
+                        lock.withLock {
                             if (!playing) {
                                 track.play()
                                 playing = true
-                                lock.notify()
+                                playback.signal()
                             }
                         }
                         track.write(buf, 0, n - n % FRAME_BYTES)
@@ -140,9 +143,9 @@ class AudioBridge(
     /** Releases the audio output when the guest goes quiet (the sink suspends and stops writing); sleeps while paused. */
     private fun pauseWhenIdle() {
         while (true) {
-            synchronized(lock) { while (!playing) lock.wait() }
+            lock.withLock { while (!playing) playback.await() }
             Thread.sleep(500)
-            synchronized(lock) {
+            lock.withLock {
                 if (playing && SystemClock.uptimeMillis() - lastData > 1000) {
                     track.pause()
                     playing = false

@@ -31,8 +31,8 @@ object Versioned {
         return try {
             val root = JSONTokener(text).nextValue()
             val wrapped = root is JSONObject && root.has("v") && root.has("data")
-            var data = if (wrapped) (root as JSONObject).get("data") else root
-            var version = if (wrapped) (root as JSONObject).getInt("v") else 0
+            var data = if (wrapped) root.get("data") else root
+            var version = if (wrapped) root.getInt("v") else 0
             while (version < current) data = migrate(version++, data)
             data
         } catch (e: Exception) {

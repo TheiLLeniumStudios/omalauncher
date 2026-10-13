@@ -29,8 +29,8 @@ class ArchDocsProvider : DocumentsProvider() {
 
     private lateinit var docs: ArchDocs
 
-    /** Where the shown tree roots; overridable so a build variant could retarget it. */
-    protected open fun rootDir(context: Context): File = File(context.filesDir, "arch/root")
+    /** Where the shown tree roots: the guest's home. */
+    private fun rootDir(context: Context): File = File(context.filesDir, "arch/root")
 
     override fun onCreate(): Boolean {
         val context = requireNotNull(getContext())

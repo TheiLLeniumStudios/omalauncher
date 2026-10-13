@@ -19,7 +19,7 @@ class ThemeDirsTest {
         path: String,
         text: String = "",
     ) = File(tmp.root, path).apply {
-        parentFile.mkdirs()
+        parentFile?.mkdirs()
         writeText(text)
     }
 

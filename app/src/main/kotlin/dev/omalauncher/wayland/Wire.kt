@@ -107,7 +107,7 @@ class Event(
         closeFd = close
     }
 
-    fun string(s: String?) =
+    fun string(s: String?): Event =
         apply {
             if (s == null) return int(0)
             val encoded = s.toByteArray()

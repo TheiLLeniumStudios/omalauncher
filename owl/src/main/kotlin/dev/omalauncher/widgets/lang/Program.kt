@@ -85,7 +85,12 @@ class Env(
         return when (val s = e.slots[index]) {
             is Value -> s
             // Only frames from lets() hold an Ev, and their array is an Array<Any?>.
-            is Ev -> s(e).also { @Suppress("UNCHECKED_CAST") (e.slots as Array<Any?>)[index] = it }
+            is Ev ->
+                s(e).also {
+                    @Suppress("UNCHECKED_CAST")
+                    val slots = e.slots as Array<Any?>
+                    slots[index] = it
+                }
             else -> @Suppress("UNCHECKED_CAST") (s as () -> Value)()
         }
     }

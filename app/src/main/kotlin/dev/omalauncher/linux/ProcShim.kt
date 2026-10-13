@@ -3,7 +3,9 @@ package dev.omalauncher.linux
 import android.os.SystemClock
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
+import kotlin.concurrent.withLock
 
 /**
  * Android's SELinux policy hides several /proc files from apps (stat, uptime,
@@ -32,7 +34,8 @@ class ProcShim(
     }
 
     private var started = false
-    private val lock = Object()
+    private val lock = ReentrantLock()
+    private val activated = lock.newCondition()
 
     /** Only kept current while something can show it: a Linux window or the home screen's widgets. */
     private var active = true
@@ -42,7 +45,7 @@ class ProcShim(
         started = true
         thread(name = "proc-shim", isDaemon = true) {
             while (true) {
-                synchronized(lock) { while (!active) lock.wait() }
+                lock.withLock { while (!active) activated.await() }
                 runCatching { update() }
                 Thread.sleep(1000)
             }
@@ -50,9 +53,9 @@ class ProcShim(
     }
 
     fun setActive(on: Boolean) =
-        synchronized(lock) {
+        lock.withLock {
             active = on
-            lock.notify()
+            activated.signal()
         }
 
     private fun readable(path: String) = runCatching { File(path).inputStream().use { it.read() } }.isSuccess
