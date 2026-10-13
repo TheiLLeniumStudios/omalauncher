@@ -42,11 +42,14 @@ data class Store(
     }
 }
 
-/** The key of an install record: the catalog id for the built-in store, as records before other stores were. */
+/**
+ * The key of an install record: the catalog id for the built-in store, as records before other stores were.
+ * Lowercased like [Store]'s equality, so a store re-added with other capitals finds its installs.
+ */
 fun installKey(
     store: Store,
     id: String,
-) = if (store.reviewed) id else "${store.repo}:$id"
+) = if (store.reviewed) id else "${store.repo.lowercase()}:$id"
 
 /** The installed file's name; two stores' widgets with the same id get different files. */
 fun installFile(

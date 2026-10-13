@@ -69,8 +69,8 @@ fun publishWidgetCommand(
                 "with the preview.png owl-check points to next to it. Its meta needs a description, a version and a license (ask me which " +
                 "license; suggest MIT), and it should declare its packages in requires. If that widget is already there, raise its meta " +
                 "version so the app offers an update. Leave out anything personal: tokens, paths to my files, my location. Show me the final " +
-                "file before pushing, then commit with a Conventional Commits message, push, and give me the store page ${store.base}; " +
-                "it's live once the repo's Pages workflow finishes, in about a minute."
+                "file before pushing, then commit with a Conventional Commits message, push, and give me the commit's link. The store " +
+                "(${store.base}index.json) updates once the repo's Pages workflow finishes, in about a minute."
         }
     return agentCommand(agentBin, prompt)
 }
