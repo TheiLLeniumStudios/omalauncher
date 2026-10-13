@@ -48,8 +48,10 @@ internal fun reorderCells(
     for (key in cells.keys.sortedBy { cells.getValue(it).y * cols + cells.getValue(it).x }) {
         if (plan.getValue(key).overlaps(target)) plan = move(key, plan, emptySet()) ?: return null
     }
-    // Older layouts can already overlap after fitting to a smaller display. Never commit that.
-    if (plan.any { (key, cell) -> plan.any { (other, c) -> other != key && c.overlaps(cell) } }) return null
+    // Fitted to a smaller display, untouched tiles can already overlap; that's display only and stays as it is.
+    // A tile this moves must land clear of every other, though.
+    val moved = plan.filter { (key, cell) -> cells[key] != cell }
+    if (moved.any { (key, cell) -> plan.any { (other, c) -> other != key && c.overlaps(cell) } }) return null
     return plan
 }
 

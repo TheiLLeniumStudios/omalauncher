@@ -78,4 +78,15 @@ class GridReorderTest {
         val plan = reorderCells(fitted, target, 4, 4)!!
         assertEquals(setOf("near"), movedBy(plan, fitted).keys)
     }
+
+    /** Two tiles fitted onto the same cells of a small grid don't stop other tiles from moving; only what moves must land clear. */
+    @Test fun overlapsAmongUntouchedTilesDontBlockADrag() {
+        val fitted = mapOf("a" to Cell(0, 0, 2, 2), "b" to Cell(1, 1, 2, 2), "c" to Cell(4, 0, 1, 1))
+        assertEquals(fitted, reorderCells(fitted, Cell(5, 3, 1, 1), 6, 4))
+        val plan = reorderCells(fitted, Cell(4, 0, 1, 1), 6, 4)!!
+        assertEquals(setOf("c"), movedBy(plan, fitted).keys)
+        assertFalse(plan.any { (key, cell) -> key != "c" && cell.overlaps(plan.getValue("c")) })
+        // Making room still never lands a moved tile on another.
+        assertNull(reorderCells(mapOf("a" to Cell(0, 0, 2, 2), "b" to Cell(0, 0, 2, 2)), Cell(0, 0, 1, 1), 2, 2))
+    }
 }
