@@ -221,9 +221,11 @@
 
         <!-- Lets any Android app browse and edit the Arch files (/root of the proot'd system) through SAF: -->
         <!-- document pickers, file managers, editors. The provider lives in .files (ArchDocsProvider). -->
+        <!-- Off until the user turns it on in Linux settings (ArchDocsProvider.setEnabled): the home holds keys and logins. -->
         <provider
             android:name=".files.ArchDocsProvider"
             android:authorities="${applicationId}.arch.documents"
+            android:enabled="false"
             android:exported="true"
             android:grantUriPermissions="true"
             android:permission="android.permission.MANAGE_DOCUMENTS">

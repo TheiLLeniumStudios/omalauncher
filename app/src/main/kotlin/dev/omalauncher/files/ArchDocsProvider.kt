@@ -1,6 +1,8 @@
 package dev.omalauncher.files
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.os.CancellationSignal
@@ -140,6 +142,20 @@ class ArchDocsProvider : DocumentsProvider() {
         }
 
     companion object {
+        /** Whether other apps can see the Linux home; off as shipped (see the manifest). */
+        fun isEnabled(context: Context) =
+            context.packageManager.getComponentEnabledSetting(ComponentName(context, ArchDocsProvider::class.java)) ==
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+
+        fun setEnabled(
+            context: Context,
+            on: Boolean,
+        ) = context.packageManager.setComponentEnabledSetting(
+            ComponentName(context, ArchDocsProvider::class.java),
+            if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DEFAULT,
+            PackageManager.DONT_KILL_APP,
+        )
+
         // The SDK hides its own projection arrays; these are what the methods use.
         private val rootProjection =
             arrayOf(

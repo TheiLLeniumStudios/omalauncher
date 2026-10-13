@@ -165,4 +165,10 @@ class ArchDocsTest {
         assertTrue(authorities.isNotEmpty())
         for (authority in authorities) assertTrue(authority, authority.startsWith("\${applicationId}."))
     }
+
+    /** The home holds keys and agent logins: other apps only see it once the user turns it on in Linux settings. */
+    @Test fun theProviderShipsTurnedOff() {
+        val provider = Regex("""<provider\s[^>]*ArchDocsProvider[^>]*>""").find(File("src/main/AndroidManifest.xml").readText())!!.value
+        assertTrue(provider, "android:enabled=\"false\"" in provider)
+    }
 }

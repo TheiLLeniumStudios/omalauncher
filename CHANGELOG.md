@@ -12,8 +12,9 @@ Dates are when the build was uploaded to Play.
   30 minutes for its next interval.
 - Ask for local network access (target SDK 37): Linux and widgets can reach
   LAN hosts again (Cast, printers, `http://192.168.x`, …).
-- The Arch files are open to every Android app: file managers, editors and
-  Open/Save dialogs can browse, read and edit them through SAF.
+- The Arch files can be opened from other Android apps: file managers, editors and
+  Open/Save dialogs can browse, read and edit them through SAF, once you turn on
+  settings › linux › linux files in android apps (off by default).
 - Websites installed from a browser (Install app, or Add to home screen) show up
   on the home screen and in the app drawer, like other apps' shortcuts to home.
   Browsers didn't offer to install them before.

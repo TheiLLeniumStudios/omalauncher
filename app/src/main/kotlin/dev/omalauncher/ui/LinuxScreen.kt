@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.omalauncher.Runtime
+import dev.omalauncher.files.ArchDocsProvider
 import dev.omalauncher.linux.AGENTS
 import dev.omalauncher.linux.JobState
 import dev.omalauncher.linux.LinuxState
@@ -140,6 +141,8 @@ private fun Installed(runtime: Runtime) {
         Spacer(Modifier.height(8.dp))
         GpuRow(runtime)
     }
+    Spacer(Modifier.height(8.dp))
+    SharedFilesRow()
     Spacer(Modifier.height(16.dp))
     if (!confirm) {
         BracketAction("remove linux", Palette.red) { confirm = true }
@@ -158,6 +161,29 @@ private fun Installed(runtime: Runtime) {
                 BracketAction("remove", Palette.red, runtime::removeLinux)
                 BracketAction("cancel", Palette.muted) { confirm = false }
             }
+        }
+    }
+}
+
+/** Opt-in: Android apps (file managers, editors, Open/Save dialogs) reach /root through [ArchDocsProvider]. */
+@Composable
+private fun SharedFilesRow() {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(ArchDocsProvider.isEnabled(context)) }
+    Row(
+        Modifier.fillMaxWidth().clip(LauncherStyle.shape(12.dp)).background(Palette.surface).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            BasicText("linux files in android apps", style = Mono.copy(fontSize = TextSize.Item))
+            BasicText(
+                (if (on) "on · " else "off · ") + "an app you grant a folder can read and change everything in it, dotfiles included",
+                style = Mono.copy(color = if (on) Palette.green else Palette.muted, fontSize = TextSize.Small),
+            )
+        }
+        BracketAction(if (on) "turn off" else "turn on", if (on) Palette.red else Palette.accent) {
+            ArchDocsProvider.setEnabled(context, !on)
+            on = !on
         }
     }
 }
