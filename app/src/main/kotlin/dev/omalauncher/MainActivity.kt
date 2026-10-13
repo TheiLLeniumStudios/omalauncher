@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.ActivityManager
 import android.app.role.RoleManager
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
@@ -13,11 +15,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withResumed
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
+import dev.omalauncher.linux.LinuxState
+import dev.omalauncher.ui.LOCAL_NETWORK_ASKED
 import dev.omalauncher.ui.Palette
+import dev.omalauncher.ui.asksLocalNetworkAtHome
 import dev.omalauncher.ui.applySystemBars
 import dev.omalauncher.ui.LauncherRoot
 import dev.omalauncher.ui.LauncherState
@@ -34,6 +40,14 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
             getSharedPreferences("launcher", MODE_PRIVATE).edit().putBoolean("location_asked", true).apply()
             runtime.widgets.location.refresh()
+            asking.value = false
+        }
+
+    /** Local network access for Linux installed before the install asked for it; asked once. */
+    private val localNetworkPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            getSharedPreferences("launcher", MODE_PRIVATE).edit().putBoolean(LOCAL_NETWORK_ASKED, true).apply()
+            asking.value = false
         }
 
     /** True once this activity has launched the location dialog. */
@@ -41,6 +55,9 @@ class MainActivity : ComponentActivity() {
 
     /** Done when the home-role chooser (if any) closes, so the two dialogs never stack. */
     private val homeRoleDone = CompletableDeferred<Unit>()
+
+    /** A permission dialog of ours is up; the next one waits for it. */
+    private val asking = MutableStateFlow(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,8 +81,32 @@ class MainActivity : ComponentActivity() {
             snapshotFlow { runtime.launcherReady }.first { it }
             runtime.widgets.location.wanted.first { it }
             homeRoleDone.await()
-            withResumed { requestLocation() }
+            askWhenFree(::requestLocation)
         }
+        // Linux is installed (maybe before its install asked for local network access): ask once, for LAN hosts.
+        lifecycleScope.launch {
+            snapshotFlow { runtime.launcherReady }.first { it }
+            runtime.bootstrap.state.first { it == LinuxState.Installed }
+            homeRoleDone.await()
+            askWhenFree(::requestLocalNetwork)
+        }
+    }
+
+    /** Runs [ask] in the foreground once no dialog of ours is up, so two never stack. */
+    private suspend fun askWhenFree(ask: () -> Unit) {
+        while (true) {
+            asking.first { !it }
+            if (withResumed { if (asking.value) false else true.also { ask() } }) return
+        }
+    }
+
+    /** Asks once for local network access while Linux is installed; a refusal, here or at the install, stands. */
+    private fun requestLocalNetwork() {
+        val asked = getSharedPreferences("launcher", MODE_PRIVATE).getBoolean(LOCAL_NETWORK_ASKED, false)
+        val granted = checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
+        if (!asksLocalNetworkAtHome(Build.VERSION.SDK_INT, granted, runtime.bootstrap.state.value == LinuxState.Installed, asked)) return
+        asking.value = true
+        localNetworkPermission.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
     }
 
     @Suppress("DEPRECATION")
@@ -78,9 +119,10 @@ class MainActivity : ComponentActivity() {
 
     /** Asks once for the coarse location, only while a widget wants it; a denial is remembered. */
     private fun requestLocation() {
-        if (!runtime.widgets.location.wanted.value || runtime.widgets.location.granted || locationAsked) return
+        if (asking.value || !runtime.widgets.location.wanted.value || runtime.widgets.location.granted || locationAsked) return
         if (getSharedPreferences("launcher", MODE_PRIVATE).getBoolean("location_asked", false)) return
         locationAsked = true
+        asking.value = true
         locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
     }
 
