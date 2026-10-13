@@ -135,7 +135,7 @@ class Market(
         working[key] = "installing…"
         try {
             val bytes = withContext(Dispatchers.IO) { httpGet(store.base + e.path) }
-            if (Review.sha256(bytes) != e.sha256) return "the download doesn't match the reviewed version; try again later"
+            if (Review.sha256(bytes) != e.sha256) return "the download doesn't match the store's catalog; try again later"
             val update = installedFrom(store, e)
             val name = update?.file ?: installFile(store, e.author, e.id.substringAfter('/'))
             withContext(Dispatchers.IO) {
