@@ -53,13 +53,17 @@ fun SettingsScreen(
                 else -> "not installed · install Arch Linux for terminal apps and agents"
             }
         val rows =
-            listOf(
+            listOfNotNull(
                 Triple("style", runtime.themes.current?.title ?: "theme, background, home screen", onStyle),
                 Triple("gestures", "swipe up: ${runtime.gestures.swipeUp.label}", onGestures),
-                Triple(
-                    "private space",
-                    if (runtime.androidApps.privateShown) "shown in app drawer · tap to hide" else "hidden in app drawer · tap to show",
-                ) { runtime.androidApps.updatePrivateShown(!runtime.androidApps.privateShown) },
+                if (runtime.androidApps.privateProfiles.isEmpty()) {
+                    null
+                } else {
+                    Triple(
+                        "private space",
+                        if (runtime.androidApps.privateShown) "shown in app drawer · tap to hide" else "hidden in app drawer · tap to show",
+                    ) { runtime.androidApps.updatePrivateShown(!runtime.androidApps.privateShown) }
+                },
                 Triple("linux", linuxStatus, onLinux),
                 if (installed) {
                     Triple("coding agents", runtime.agents.default?.let { "default: ${it.name}" } ?: "install Claude Code, OpenCode, …", onAgents)
