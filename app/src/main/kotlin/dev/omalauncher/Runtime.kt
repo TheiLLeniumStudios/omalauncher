@@ -1,11 +1,14 @@
 package dev.omalauncher
 
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
+import android.content.IntentFilter
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import android.view.KeyEvent
 import androidx.compose.runtime.getValue
@@ -186,6 +189,18 @@ class Runtime(
                     ),
             )
         }
+        // The lock cover goes up as the screen turns off, so it's over the lock screen when it comes back on.
+        val screenOff =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    context: Context,
+                    intent: Intent,
+                ) {
+                    if (themes.lockCoverEnabled) LockCoverActivity.show(context)
+                }
+            }
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(screenOff, filter, Context.RECEIVER_NOT_EXPORTED) else context.registerReceiver(screenOff, filter)
     }
 
     /** The launcher first (it never waits for Linux), then Linux if it's installed or an install was started. */

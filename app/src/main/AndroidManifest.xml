@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- "Display over other apps" lets the lock cover start while another app is in front (LockCoverActivity). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-feature
         android:name="android.software.live_wallpaper"
@@ -166,6 +168,17 @@
             android:taskAffinity="${applicationId}.files"
             android:theme="@style/Theme.Omalauncher.Window"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- The Omarchy lock cover over Android's lock screen; unlocking is still the system's. -->
+        <activity
+            android:name=".LockCoverActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:taskAffinity="${applicationId}.lock"
+            android:theme="@style/Theme.Omalauncher.Window" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -225,6 +225,15 @@ class ThemeStore(
         Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
             .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, ComponentName(context, OmarchyWallpaperService::class.java))
 
+    /** Whether the Omarchy lock cover ([dev.omalauncher.LockCoverActivity]) goes up as the screen turns off. */
+    var lockCoverEnabled by mutableStateOf(prefs.getBoolean(LOCK_COVER, false))
+        private set
+
+    fun setLockCover(on: Boolean) {
+        lockCoverEnabled = on
+        prefs.edit().putBoolean(LOCK_COVER, on).apply()
+    }
+
     /** Whether the Omarchy files on disk are the release this app pins. */
     fun hasCurrentRelease() = release.isCurrent()
 
@@ -557,6 +566,7 @@ class ThemeStore(
         const val OMARCHY_REF = "a268c198387215ab3e08d65672efe0b23ae3cd26"
 
         private const val RENDERED_BY = "rendered_by"
+        private const val LOCK_COVER = "lock_cover"
         private const val DEFAULT_THEME = "tokyo-night"
         private const val STATIC_WALLPAPER = "static_wallpaper"
 
@@ -578,7 +588,8 @@ class ThemeStore(
          */
         fun savedSelection(context: Context): Pair<Map<String, String>, File?>? {
             val saved = StyleStore.read(context)
-            val name = saved[Style.THEME] ?: return null
+            // Unset until the user picks one: the default theme, as [picked].
+            val name = saved[Style.THEME] ?: DEFAULT_THEME
             val theme = runCatching { themeDirs(context).load(name) }.getOrNull() ?: return null
             // Unset, or not one of the theme's: its first, as the launcher shows.
             val bg = theme.backgrounds().let { list -> list.firstOrNull { it.name == saved[Style.BACKGROUND] } ?: list.firstOrNull() }
