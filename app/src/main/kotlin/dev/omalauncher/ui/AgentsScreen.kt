@@ -41,6 +41,7 @@ fun AgentsScreen(
                 AgentRow(
                     agent = agent,
                     installed = agent in store.installed,
+                    removable = agent.bin in store.removable,
                     state = store.states[agent.bin] ?: JobState.Idle,
                     onInstall = { scope.launch { store.install(agent) } },
                     onRemove = { scope.launch { store.remove(agent) } },
@@ -55,6 +56,7 @@ fun AgentsScreen(
 private fun AgentRow(
     agent: Agent,
     installed: Boolean,
+    removable: Boolean,
     state: JobState,
     onInstall: () -> Unit,
     onRemove: () -> Unit,
@@ -76,7 +78,8 @@ private fun AgentRow(
                 state is JobState.Working -> BasicText("${state.action}…", style = Mono.copy(color = Palette.accent))
                 installed -> {
                     BracketAction("open", Palette.green, onOpen)
-                    BracketAction("remove", Palette.red, onRemove)
+                    // In ~/.local/bin, it's the user's: their own command, or an agent's own installer (Hermes).
+                    if (removable) BracketAction("remove", Palette.red, onRemove) else BasicText(" ~/.local/bin", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
                 }
                 else -> BracketAction("install", Palette.accent, onInstall)
             }
