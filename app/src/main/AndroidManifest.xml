@@ -159,6 +159,13 @@
             android:label="oh-my-pi"
             android:targetActivity=".LinuxWindowActivity" />
 
+        <activity-alias
+            android:name=".HermesWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_hermes"
+            android:label="Hermes Agent"
+            android:targetActivity=".LinuxWindowActivity" />
+
         <activity
             android:name=".FilesActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
