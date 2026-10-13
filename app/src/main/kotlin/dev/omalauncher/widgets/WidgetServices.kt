@@ -45,6 +45,7 @@ import dev.omalauncher.widgets.lang.bool
 import dev.omalauncher.androidAppKey
 import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.widgets.runtime.Alarm
+import dev.omalauncher.widgets.runtime.Location
 import dev.omalauncher.widgets.runtime.Media
 import dev.omalauncher.widgets.runtime.Modes
 import dev.omalauncher.widgets.runtime.Notifications
@@ -96,6 +97,9 @@ class WidgetServices(
     private val alarm = Alarm(context)
     private val modes = Modes(context)
 
+    /** The phone's location, for `android.location`; the home screen watches [Location.wanted] to ask for it. */
+    val location = Location(context)
+
     /** Opens launcher screens ("style" or "themes", "agents", "drawer"); set by the UI. */
     var launcherAction: ((String) -> Unit)? = null
 
@@ -134,6 +138,7 @@ class WidgetServices(
             "volume" -> volume.value()
             "alarm" -> alarm.value()
             "modes" -> modes.value()
+            "location" -> location.value()
             else -> throw WidgetError("unknown android source $name")
         }
 
@@ -144,6 +149,7 @@ class WidgetServices(
             "volume" -> volume.updates()
             "alarm" -> alarm.updates()
             "modes" -> modes.updates()
+            "location" -> location.updates()
             "battery" ->
                 callbackFlow {
                     val receiver =
