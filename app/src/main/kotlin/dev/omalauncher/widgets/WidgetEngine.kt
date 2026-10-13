@@ -215,6 +215,14 @@ class WidgetEngine(
         listOf("widgets", "widgets/examples").flatMap { context.assets.list(it).orEmpty().filter { n -> n.endsWith(".owl") } }.toSet()
     }
 
+    /** The SHA-256 of each widget this app ships, by file name: only an unchanged one may read the phone's location. */
+    private val bundledHashes by lazy {
+        listOf("widgets", "widgets/examples")
+            .flatMap { dir -> context.assets.list(dir).orEmpty().filter { it.endsWith(".owl") }.map { it to Review.sha256(context.assets.open("$dir/$it").use { s -> s.readBytes() }) } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { it.value.toSet() }
+    }
+
     /** The user (or their agent) wrote it: not shipped with the app, installed from the store, shared with them, or an agent's tile. */
     fun isOwnWidget(spec: WidgetSpec): Boolean {
         val name = spec.file.name
@@ -391,6 +399,8 @@ class WidgetEngine(
         val changed = ArrayList<String>()
         val parsed =
             withContext(Dispatchers.IO) {
+                // Read here, off the main thread, before instances below need it.
+                bundledHashes
                 files.map { f -> old[f.name]?.takeIf { it.stamp == f.lastModified() } ?: compile(f, old[f.name]).also { changed += f.name } }
             }
         specs.clear()
@@ -412,7 +422,7 @@ class WidgetEngine(
             val inst =
                 WidgetInstance(
                     program,
-                    if (mayLocate(name, name in bundledFiles, isOwnWidget(spec))) services else WithoutLocation(services),
+                    if (mayLocate(name, hashes[name], bundledHashes)) services else WithoutLocation(services),
                     { message -> writeError(spec.file, message, append = true) },
                     File(stateDir, "$name.json"),
                     onScreen = { open -> if (open) openScreen = name else if (openScreen == name) openScreen = null },

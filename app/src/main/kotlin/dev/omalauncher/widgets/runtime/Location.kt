@@ -148,14 +148,15 @@ class Location(
 }
 
 /**
- * Whether the widget in [file] may read `android.location`: the launcher's own ([bundled]) and ones the user wrote
- * ([own]). One installed from a store (market-*) or opened from a shared link (shared-*) gets [WithoutLocation].
+ * Whether the widget in [file], whose bytes hash to [hash], may read `android.location`: only one exactly as the app
+ * ships it, by the SHA-256 of the asset of the same name in [bundled]. Anything else (written by the user or an agent,
+ * a bundled one edited or rewritten from the guest, a store or shared widget) gets [WithoutLocation].
  */
 internal fun mayLocate(
     file: String,
-    bundled: Boolean,
-    own: Boolean,
-) = bundled || (own && !file.startsWith("market-") && !file.startsWith("shared-"))
+    hash: String?,
+    bundled: Map<String, Set<String>>,
+) = hash != null && bundled[file]?.contains(hash) == true
 
 /** [services] for a widget that may not locate the phone: `android.location` reads null, as without the permission, and never asks for it. */
 class WithoutLocation(
