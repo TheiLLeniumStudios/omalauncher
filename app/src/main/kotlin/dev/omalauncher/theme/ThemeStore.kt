@@ -509,7 +509,7 @@ class ThemeStore(
 
     companion object {
         /** The Omarchy commit themes and configs come from. Changing it updates them on every install. */
-        const val OMARCHY_REF = "8b4eae66da2938ba9559f103b18dbf85cdf28a70"
+        const val OMARCHY_REF = "a268c198387215ab3e08d65672efe0b23ae3cd26"
 
         private const val RENDERED_BY = "rendered_by"
         private const val DEFAULT_THEME = "tokyo-night"

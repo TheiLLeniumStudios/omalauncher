@@ -17,6 +17,7 @@ retro-82 1-in-the-groove.webp
 ristretto 0-launch.webp
 rose-pine 1-funky-shapes.webp
 solitude 1-on-pole.webp
+starship 1-starbase.webp
 tokyo-night 0-winding-road.webp
 vantablack 0-dot-hands.webp
 white 1-white.webp
