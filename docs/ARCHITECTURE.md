@@ -119,8 +119,12 @@ Pinned versions: `ThemeStore.OMARCHY_REF` (the Omarchy commit) and
 download the new themes on its next start (`ThemeStore.ensureRelease`, with or
 without Linux); rerun `scripts/fetch-theme-colors.sh` with it, since first run
 fetches only the picked theme's colors and first background by the names that
-script bundles. Changing the second updates Linux installs through the steps
-above.
+script bundles. That download is the `omarchy-<ref>` release of this repo, not
+GitHub's tarball of Omarchy (~780 MB since the themes gained intro videos):
+`scripts/pack-omarchy.sh` repacks the pinned commit without the intro videos
+and lock-screen images (~60 MB), and `apk.yml` publishes it before building
+the first APK that pins it. Changing the second updates Linux installs
+through the steps above.
 
 Guest processes die with the app (`--kill-on-exit`), so the Wayland protocol,
 the socket and the guest environment carry no state across an update.

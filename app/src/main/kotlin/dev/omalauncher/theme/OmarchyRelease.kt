@@ -48,15 +48,22 @@ class OmarchyRelease(
         writeAtomically(target, httpGet(url, connectTimeout = 15_000, readTimeout = 30_000))
     }
 
-    /** Blocking. [onProgress] gets the megabytes read so far. */
+    /**
+     * The pinned commit, repacked by CI without the intro videos and lock-screen images
+     * (scripts/pack-omarchy.sh): ~60 MB in one request, where GitHub's own tarball is
+     * ~780 MB and fetching the kept files one by one is hundreds of rate-limited requests.
+     * Blocking. [onProgress] gets the megabytes read so far.
+     */
     fun download(onProgress: (Int) -> Unit) {
         val staging = File(dir.parentFile, ".omarchy.download").apply { deleteRecursively() }
-        unpackTarball("https://codeload.github.com/omacom/omarchy/tar.gz/${ThemeStore.OMARCHY_REF}", staging, onProgress) { path ->
-            // The lock-screen images are unused here and add ~20 MB.
-            KEEP_PATHS.any { path.startsWith(it) } && !path.endsWith("unlock.png")
+        unpackTarball("$PACKS/omarchy-${ThemeStore.OMARCHY_REF}/omarchy-${ThemeStore.OMARCHY_REF}.tar.gz", staging, onProgress) { path ->
+            KEEP_PATHS.any { path.startsWith(it) }
         }
         File(staging, marker.name).writeText(ThemeStore.OMARCHY_REF + "\n")
         dir.deleteRecursively()
         check(staging.renameTo(dir)) { "can't move the themes into place" }
     }
 }
+
+/** The fork's releases, where CI publishes each pinned commit's pack (apk.yml) before any APK that needs it. */
+private const val PACKS = "https://github.com/TheiLLeniumStudios/omalauncher/releases/download"

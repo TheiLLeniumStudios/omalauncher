@@ -56,6 +56,19 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
 
+      # The themes the APK downloads (OmarchyRelease): published once per pinned commit, before any APK needs them.
+      - name: Publish the Omarchy pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ref=$(sed -n 's/.*const val OMARCHY_REF = "\([0-9a-f]*\)".*/\1/p' app/src/main/kotlin/dev/omalauncher/theme/ThemeStore.kt)
+          if ! gh release view "omarchy-$ref" >/dev/null 2>&1; then
+            scripts/pack-omarchy.sh
+            gh release create "omarchy-$ref" "omarchy-$ref.tar.gz" --target "$GITHUB_SHA" --latest=false \
+              --title "Omarchy ${ref::12}" \
+              --notes "github.com/omacom/omarchy at $ref, without the intro videos and lock-screen images (scripts/pack-omarchy.sh)."
+          fi
+
       # Every build a newer version than the last, so Android and Obtainium see the update.
       - name: Build
         run: ./gradlew :app:assembleRelease -PciRun=${{ github.run_number }} -PciSha=${GITHUB_SHA::7}

@@ -478,9 +478,9 @@ private fun DownloadPrompt(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         BasicText(
             if (partial) {
-                "Omarchy's other themes are downloading from github.com/omacom/omarchy (~70 MB)."
+                "Omarchy's other themes are downloading from GitHub, repacked from omacom/omarchy without its intro videos (~60 MB)."
             } else {
-                "Omarchy's themes aren't installed yet. They're downloaded from github.com/omacom/omarchy (~70 MB)."
+                "Omarchy's themes aren't installed yet. They're downloaded from GitHub, repacked from omacom/omarchy without its intro videos (~60 MB)."
             },
             style = Mono,
         )
