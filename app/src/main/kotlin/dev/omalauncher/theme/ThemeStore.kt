@@ -167,8 +167,11 @@ class ThemeStore(
             .onSuccess { Palette.apply(it) }
     }
 
-    /** Whether picking a theme or background also sets the static system and lock wallpaper. */
-    var staticWallpaperEnabled by mutableStateOf(prefs.getBoolean(STATIC_WALLPAPER, true))
+    /**
+     * Whether picking a theme or background also sets the static system and lock wallpaper.
+     * Off until the user turns it on, so an update never replaces their own lock screen photo.
+     */
+    var staticWallpaperEnabled by mutableStateOf(prefs.getBoolean(STATIC_WALLPAPER, false))
         private set
 
     fun setStaticWallpaper(on: Boolean) {
