@@ -58,17 +58,13 @@ class ArchDocsProvider : DocumentsProvider() {
 
     override fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?, sortOrder: String?): Cursor {
         val cursor = MatrixCursor(projection ?: documentProjection)
-        for (child in docs.visibleChildren(docs.fileFor(parentDocumentId))) {
-            include(cursor, docs.childDocId(parentDocumentId, child.name))
-        }
+        for (id in docs.childIds(parentDocumentId)) include(cursor, id)
         return cursor
     }
 
     override fun getDocumentType(documentId: String) = mimeType(docs.fileFor(documentId))
 
-    override fun isChildDocument(parentDocumentId: String, documentId: String) =
-        documentId == parentDocumentId ||
-            documentId.startsWith("$parentDocumentId/")
+    override fun isChildDocument(parentDocumentId: String, documentId: String) = docs.isChild(parentDocumentId, documentId)
 
     override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
         val file = docs.fileFor(documentId)
@@ -92,24 +88,13 @@ class ArchDocsProvider : DocumentsProvider() {
     }
 
     override fun deleteDocument(documentId: String) {
-        val file = docs.fileFor(documentId)
-        if (!file.exists()) throw FileNotFoundException(documentId)
-        if (!file.deleteRecursively()) throw IllegalStateException("could not delete ${file.path}")
-        notify(parentOf(documentId))
+        docs.delete(documentId)
+        notify(docs.parentOf(documentId))
     }
 
     /** The new document id, which clients go on using for the renamed file. */
-    override fun renameDocument(documentId: String, displayName: String): String? {
-        if (displayName.isEmpty() || displayName == "." || displayName == ".." || displayName.contains('/')) {
-            throw FileNotFoundException("not a usable name: $displayName")
-        }
-        val file = docs.fileFor(documentId)
-        val target = docs.uniqueChild(file.parentFile ?: throw FileNotFoundException(documentId), displayName)
-        // renameTo fails instead of copying across devices; the parent is the same, so that can't happen here.
-        if (!file.renameTo(target)) throw IllegalStateException("could not rename ${file.path} to $displayName")
-        notify(parentOf(documentId))
-        return docs.childDocId(parentOf(documentId), target.name)
-    }
+    override fun renameDocument(documentId: String, displayName: String): String? =
+        docs.rename(documentId, displayName).also { notify(docs.parentOf(documentId)) }
 
     private fun include(cursor: MatrixCursor, documentId: String): Boolean {
         val file =
@@ -136,9 +121,6 @@ class ArchDocsProvider : DocumentsProvider() {
             .add(DocumentsContract.Document.COLUMN_LAST_MODIFIED, file.lastModified())
         return true
     }
-
-    private fun parentOf(documentId: String): String =
-        if (documentId.contains('/')) documentId.substringBeforeLast('/') else docs.rootDocId
 
     /** SAF clients learn about changes by us notifying them; both the parent's listing and the row itself. */
     private fun notify(parentDocumentId: String) {
