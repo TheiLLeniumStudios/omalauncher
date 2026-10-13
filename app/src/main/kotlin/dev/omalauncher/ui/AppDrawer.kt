@@ -198,6 +198,8 @@ internal class AppHandlers(
     val pin: (AppHit) -> Unit,
     /** Takes an app back off the bar; in picked mode the bar is the home screen, so this unpins it. */
     val removeFromBar: (AppHit) -> Unit,
+    /** Whether the bar lists it in picked mode: only those offer "remove from bar". */
+    val onBar: (AppHit) -> Boolean,
     val info: (AndroidApp) -> Unit,
     val uninstall: (AndroidApp) -> Unit,
     val remove: (AndroidShortcut) -> Unit,
@@ -211,7 +213,7 @@ private fun AppHit.actions(handlers: AppHandlers): List<Pair<String, () -> Unit>
             listOfNotNull(
                 if (app.isPrivate) null else "add to home" to { handlers.pin(this) },
                 // Picked mode lists the pinned apps, so taking one off the home screen takes it off the bar.
-                if (LauncherStyle.pinnedApps) "remove from bar" to { handlers.removeFromBar(this) } else null,
+                if (LauncherStyle.pinnedApps && !app.isPrivate && handlers.onBar(this)) "remove from bar" to { handlers.removeFromBar(this) } else null,
                 "app info" to { handlers.info(app) },
                 if (app.system) null else "uninstall" to { handlers.uninstall(app) },
             )

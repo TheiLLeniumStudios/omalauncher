@@ -164,8 +164,9 @@ private fun DesktopScreen(
                     state.close()
                 },
                 removeFromBar = { hit ->
-                    if (hit is AppHit.Android) runtime.widgets.shortcuts.remove("app:" + hit.app.key)
+                    if (hit is AppHit.Android) runtime.widgets.shortcuts.removeAndroid(hit.app)
                 },
+                onBar = { hit -> hit.key in runtime.widgets.shortcuts.pinned(Int.MAX_VALUE) },
                 info = { app ->
                     state.closeNow()
                     runtime.androidApps.openInfo(app)
