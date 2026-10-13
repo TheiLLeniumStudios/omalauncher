@@ -36,4 +36,11 @@ class AgentsTest {
         assertEquals("agy -i 'hi'", agentInvocation("agy", "hi"))
         assertEquals("agy --mode plan -i 'hi'", agentInvocation("agy", "hi", readOnly = true))
     }
+
+    /** Hermes opens its chat with the first prompt, from the agent's launch command. */
+    @Test fun hermesTakesThePromptAsChatQuery() {
+        assertEquals("hermes chat -q 'hi'", agentInvocation("hermes", "hi"))
+        val hermes = AGENTS.first { it.bin == "hermes" }
+        assertTrue(agentInvocation("hermes", "hi").startsWith(hermes.launch + " chat -q "))
+    }
 }
