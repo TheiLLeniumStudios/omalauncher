@@ -146,3 +146,22 @@ class Location(
         const val UPDATE_MS = 60_000L
     }
 }
+
+/**
+ * Whether the widget in [file] may read `android.location`: the launcher's own ([bundled]) and ones the user wrote
+ * ([own]). One installed from a store (market-*) or opened from a shared link (shared-*) gets [WithoutLocation].
+ */
+internal fun mayLocate(
+    file: String,
+    bundled: Boolean,
+    own: Boolean,
+) = bundled || (own && !file.startsWith("market-") && !file.startsWith("shared-"))
+
+/** [services] for a widget that may not locate the phone: `android.location` reads null, as without the permission, and never asks for it. */
+class WithoutLocation(
+    private val services: Services,
+) : Services by services {
+    override fun android(name: String): Value = if (name == "location") Null else services.android(name)
+
+    override fun androidUpdates(name: String): Flow<Value>? = if (name == "location") null else services.androidUpdates(name)
+}

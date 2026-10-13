@@ -76,9 +76,9 @@ class MainActivity : ComponentActivity() {
         requestLocation()
     }
 
-    /** Asks once for the coarse location the weather widget places itself with; a denial is remembered. */
+    /** Asks once for the coarse location, only while a widget wants it; a denial is remembered. */
     private fun requestLocation() {
-        if (runtime.widgets.location.granted || locationAsked) return
+        if (!runtime.widgets.location.wanted.value || runtime.widgets.location.granted || locationAsked) return
         if (getSharedPreferences("launcher", MODE_PRIVATE).getBoolean("location_asked", false)) return
         locationAsked = true
         locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
