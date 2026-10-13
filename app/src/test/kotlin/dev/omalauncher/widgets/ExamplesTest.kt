@@ -35,6 +35,16 @@ class ExamplesTest {
         }
     }
 
+    /** The sample agents tile shows every agent the launcher installs, and starts each the way the launcher does. */
+    @Test fun agentsExampleKnowsEveryAgent() {
+        val src = examples.first { it.name == "60-agents.owl" }.readText()
+        val listed = Regex("""for a in ([^;]+);""").find(src)!!.groupValues[1].split(' ')
+        assertEquals(dev.omalauncher.linux.AGENTS.map { it.bin }, listed)
+        for (agent in dev.omalauncher.linux.AGENTS.filter { it.launch != it.bin }) {
+            assertTrue("${agent.bin} starts without \"${agent.launch}\"", "\"${agent.launch}\"" in src)
+        }
+    }
+
     /** The README is what agents learn the language from; its samples must compile. */
     @Test fun readmeSamplesCompile() {
         val blocks = Regex("```owl\\n(.*?)```", RegexOption.DOT_MATCHES_ALL).findAll(File("src/main/assets/widgets/README.md").readText()).map { it.groupValues[1] }.toList()

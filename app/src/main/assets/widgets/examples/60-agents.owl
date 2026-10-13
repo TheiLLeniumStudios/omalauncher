@@ -4,7 +4,8 @@ widget "agents" {
   size: 3x5
   minSize: 3x3
 
-  source installed = cmd("for a in claude opencode codex grok crush; do command -v $a >/dev/null && printf '%s ' $a; done") every 5m
+  // Every agent the launcher installs, in its order; omp needs --allow-home to stay in ~ (see Agents.kt).
+  source installed = cmd("for a in claude opencode codex grok copilot crush cursor-agent agy pi omp; do command -v $a >/dev/null && printf '%s ' $a; done") every 5m
 
   Column {
     gap: 6
@@ -15,7 +16,7 @@ widget "agents" {
     Flow {
       gap: 6
       for agent in words(installed) {
-        Button { text: agent; onTap: terminal(agent) }
+        Button { text: agent; onTap: terminal(agent == "omp" ? "omp --allow-home" : agent) }
       }
     }
     Button { text: "manage"; color: muted; onTap: launcher("agents") }
