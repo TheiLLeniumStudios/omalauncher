@@ -9,17 +9,21 @@ plugins {
 val uploadKey = rootProject.file("keystore.properties").takeIf { it.exists() }
     ?.let { f -> Properties().apply { f.inputStream().use(::load) } }
 
+// The NDK proot is built with (scripts/fetch-proot.sh); wlbridge uses the same one.
+val prootNdk = rootProject.file("scripts/fetch-proot.sh").readLines().first { it.startsWith("NDK_VERSION=") }.substringAfter('=')
+
 android {
     namespace = "dev.omalauncher"
     compileSdk = 37
+    ndkVersion = prootNdk
 
     defaultConfig {
         // Fork build: installs next to the Play Store dev.omalauncher instead of over it.
         applicationId = "dev.omalauncher.fork"
         minSdk = 29
         targetSdk = 37
-        versionCode = 12
-        versionName = "0.7.0"
+        versionCode = 16
+        versionName = "0.8.1"
         // Fork CI (apk.yml, release.yml): numbered by the commits on the branch, so a commit builds the same
         // number in either workflow, every build is newer than the last and than upstream's own. Edge builds
         // also carry their commit in the name.
@@ -62,10 +66,19 @@ android {
         release {
             // Shrinks the APK and drops what the app doesn't use, like the owl module's unused parts.
             isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = signingConfigs.getByName(if (uploadKey != null) "release" else "debug")
         }
     }
+}
+
+// ExamplesTest reads the widget examples and the README from here, so editing them reruns it.
+tasks.withType<Test>().configureEach { inputs.dir("src/main/assets/widgets") }
+
+// Gitignored, built by scripts/fetch-proot.sh. Without it a release still builds, but every Linux command fails.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    val proot = file("src/main/jniLibs/arm64-v8a/libproot.so")
+    doFirst { check(proot.exists()) { "$proot is missing; run scripts/fetch-proot.sh" } }
 }
 
 composeCompiler {

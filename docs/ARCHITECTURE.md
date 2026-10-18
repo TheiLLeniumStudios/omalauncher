@@ -51,25 +51,34 @@ drawing.
 Opt-in, in settings › linux. The device node picks the driver. Mali (v10+:
 Pixel 7 and newer, recent MediaTek) uses the pinned PanVK-kbase driver on
 `/dev/mali0`, from zenithblue-oss/panvk-kbase-android. Adreno 6xx and newer
-(`/sys/class/kgsl/kgsl-3d0/gpu_model`; if unreadable, the check decides) uses
-the pinned Turnip KGSL driver on `/dev/kgsl-3d0`, the Arch `vulkan-freedreno`
-package from lfdevs/mesa-for-android-container (turnip-26.3.0-devel-20260824).
-Arch's own Mesa talks to DRM, so it would not see `/dev/kgsl-3d0`. Both blobs
-are checked against their sha256 and installed under `/usr/local`, where pacman
-never touches them. Their ICD files go in `/usr/local/lib/omalauncher`, which
-the Vulkan loader doesn't search, so a driver loads only through
-`VK_ICD_FILENAMES`, i.e. only while the GPU is on. The check writes the ICD and
-deletes the ones earlier builds left in the loader's search path, unless a
-pacman package owns them. Turning one on also installs Mesa and the Vulkan
-loader with pacman. OpenGL is Arch's stock Mesa on top, via zink. Frames still
-arrive as wl_shm buffers (`MESA_VK_WSI_DEBUG=sw`), so the compositor is the
-same either way.
+use the pinned Turnip KGSL driver on `/dev/kgsl-3d0`, the Arch
+`vulkan-freedreno` package from lfdevs/mesa-for-android-container
+(turnip-26.3.0-devel-20260824). The model comes from
+`/sys/class/kgsl/kgsl-3d0/gpu_model`. An older Adreno, or a model that cannot
+be read, is not offered. Arch's own Mesa talks to DRM, so it would not see
+`/dev/kgsl-3d0`. Both blobs are checked against their sha256 and installed
+under `/usr/local`, and both ICD manifests live under
+`/usr/local/share/vulkan/icd.d`, which pacman does not own. A download that
+fails deletes its temp files on the way out. Turning one on also installs
+Mesa and the Vulkan loader with pacman. OpenGL is zink. On Adreno the guest
+uses a patched Mesa 26.2.4 libEGL (`scripts/mesa/0001-egl-wayland-keep-zink-on-shm.patch`):
+the compositor only offers `wl_shm`, stock Mesa clears zink after the Wayland
+DRM path fails, and the shm buffer stays black while frames still count.
+`MESA_LOADER_DRIVER_OVERRIDE=zink` keeps zink set so kopper presents through
+Vulkan WSI. The patched libraries live under `/usr/local/omalauncher-mesa`,
+off the default linker path. Frames still arrive as wl_shm buffers
+(`MESA_VK_WSI_DEBUG=sw`), so the compositor is the same either way.
 
 `linux/Gpu.kt` only switches guest apps to the GPU (`Proot.graphicsEnv`)
 after a check passes (vulkaninfo finds PanVK or Turnip, eglinfo gets zink),
-and checks again after every system update; if that fails, apps render in
-software (llvmpipe) and settings offers a retry. One app can opt out with
-`GALLIUM_DRIVER=llvmpipe app`. Terminal apps (foot) draw on the CPU and
+and checks again after every system update; if that fails, the ICD manifest
+is removed and apps render in software (llvmpipe). Software mode sets `VK_ICD_FILENAMES` and `VK_DRIVER_FILES` to a manifest
+that is never created, so the loader does not scan the default ICD
+directories. The loader prefers `VK_DRIVER_FILES`, so turning the GPU on
+sets both names to the real manifest. The check unsets the software values
+before it exports those. Settings offers a
+retry. One app can opt out with `GALLIUM_DRIVER=llvmpipe app`. Terminal apps
+(foot) draw on the CPU and
 don't change.
 
 ## Updates
@@ -119,12 +128,8 @@ Pinned versions: `ThemeStore.OMARCHY_REF` (the Omarchy commit) and
 download the new themes on its next start (`ThemeStore.ensureRelease`, with or
 without Linux); rerun `scripts/fetch-theme-colors.sh` with it, since first run
 fetches only the picked theme's colors and first background by the names that
-script bundles. That download is the `omarchy-<ref>` release of this repo, not
-GitHub's tarball of Omarchy (~780 MB since the themes gained intro videos):
-`scripts/pack-omarchy.sh` repacks the pinned commit without the intro videos
-and lock-screen images (~60 MB), and `apk.yml` publishes it before building
-the first APK that pins it. Changing the second updates Linux installs
-through the steps above.
+script bundles. Changing the second updates Linux installs through the steps
+above.
 
 Guest processes die with the app (`--kill-on-exit`), so the Wayland protocol,
 the socket and the guest environment carry no state across an update.

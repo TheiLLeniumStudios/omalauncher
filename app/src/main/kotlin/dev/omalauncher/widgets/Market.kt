@@ -8,9 +8,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.omalauncher.httpGet
+import dev.omalauncher.ui.decodeImageIcon
+import dev.omalauncher.ui.decodeSvgIcon
 import dev.omalauncher.upgrade.Versioned
 import dev.omalauncher.upgrade.mapEntries
 import dev.omalauncher.upgrade.writeAtomically
+import dev.omalauncher.widgets.lang.OwlKind
 import dev.omalauncher.widgets.market.Catalog
 import dev.omalauncher.widgets.market.CatalogEntry
 import dev.omalauncher.widgets.market.Review
@@ -21,18 +24,29 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The widget marketplace: catalogs published from GitHub repos to GitHub Pages
- * ([Store]s), the reviewed built-in one and any the user adds. Installs are
- * checked against the catalog's SHA-256, land on the current page, and remember
- * their store and which version and commands were approved, so an update that
+ * The marketplace for one [kind]: catalogs published from GitHub repos to GitHub Pages
+ * ([Store]s), the reviewed built-in one and any the user adds, widgets in index.json,
+ * pages in pages.json and apps in apps.json. Installs are checked against the catalog's
+ * SHA-256, land on the current page (a page left of page 1, an app in the drawer), and
+ * remember their store and which version and commands were approved, so an update that
  * changes them asks again.
  */
 class Market(
     private val engine: WidgetEngine,
+    val kind: OwlKind,
 ) {
     companion object {
+        /** The marketplace repo: widgets are submitted there as pull requests. */
+        const val REPO = "SimonSchubert/omarchy-widgets"
+
+        /** Where its CI publishes index.json, pages.json, apps.json and the reviewed files. */
+        const val BASE = "https://simonschubert.github.io/omarchy-widgets/"
+
         private const val VERSION = 1
         private const val STORES_VERSION = 1
+
+        /** Settings checks for updates with a catalog at most this old; the store always reloads it. */
+        private const val STALE_MS = 60 * 60 * 1000L
     }
 
     /** What the user installed and approved, per [installKey]. */
@@ -60,7 +74,15 @@ class Market(
     private val working = mutableStateMapOf<String, String>()
     val installed = mutableStateMapOf<String, Installed>()
     private val previews = HashMap<String, ImageBitmap?>()
-    private val record get() = File(engine.dir, ".market.json")
+    private val icons = HashMap<Pair<String, Int>, ImageBitmap?>()
+
+    /** When the catalog last loaded; settings reloads it only when it's older than [STALE_MS]. */
+    var refreshedAt = 0L
+        private set
+    private val catalog = if (kind == OwlKind.Widget) "index.json" else "${kind.word}s.json"
+
+    /** Each kind keeps its own records: an app and a widget may share an id. */
+    private val record get() = File(engine.dir, if (kind == OwlKind.Widget) ".market.json" else ".market-${kind.word}s.json")
     private val storesRecord get() = File(engine.dir, ".stores.json")
 
     suspend fun refresh() {
@@ -68,14 +90,30 @@ class Market(
         loading = true
         error = null
         try {
-            val list = withContext(Dispatchers.IO) { Catalog.parse(String(httpGet(store.base + "index.json"))) }
+            val list = withContext(Dispatchers.IO) { Catalog.parse(String(httpGet(store.base + catalog)), "${kind.word}s") }
             // The user may have picked another store meanwhile.
-            if (current == store) entries = list
+            if (current == store) {
+                entries = list
+                refreshedAt = System.currentTimeMillis()
+            }
         } catch (e: Exception) {
-            if (current == store) error = "couldn't load the store: ${e.message ?: e}"
+            if (current == store) {
+                // A catalog the store doesn't publish yet (pages.json, before the first page) is an empty one.
+                if (e.message?.startsWith("HTTP 404") == true) {
+                    entries = emptyList()
+                    refreshedAt = System.currentTimeMillis()
+                } else {
+                    error = "couldn't load the store: ${e.message ?: e}"
+                }
+            }
         } finally {
-            if (current == store) loading = false
+            loading = false
         }
+    }
+
+    /** Reloads the catalog unless it loaded recently; a failed load is tried again next time. */
+    suspend fun refreshIfStale() {
+        if (System.currentTimeMillis() - refreshedAt >= STALE_MS) refresh()
     }
 
     /** Shows [store]'s widgets once refreshed. */
@@ -83,6 +121,7 @@ class Market(
         current = store
         entries = emptyList()
         error = null
+        refreshedAt = 0
         saveStores()
     }
 
@@ -117,7 +156,10 @@ class Market(
     /** Installed from the current store, and its file is still there (removing the tile moves the file away). */
     fun installedVersion(e: CatalogEntry): Installed? = installedFrom(current, e)
 
-    fun hasUpdate(e: CatalogEntry) = installedVersion(e)?.let { Catalog.compareVersions(e.version, it.version) > 0 } == true
+    fun hasUpdate(e: CatalogEntry) = e.supported && installedVersion(e)?.let { Catalog.compareVersions(e.version, it.version) > 0 } == true
+
+    /** Installed ones with an update, from the last loaded catalog. */
+    val updates get() = entries.filter { hasUpdate(it) }
 
     /** An update runs different commands or needs other packages than what the user approved. */
     fun changedSinceApproval(e: CatalogEntry) = installedVersion(e)?.let { it.commands != e.commands || it.requires != e.requires } == true
@@ -137,10 +179,11 @@ class Market(
             val bytes = withContext(Dispatchers.IO) { httpGet(store.base + e.path) }
             if (Review.sha256(bytes) != e.sha256) return "the download doesn't match the store's catalog; try again later"
             val update = installedFrom(store, e)
-            val name = update?.file ?: installFile(store, e.author, e.id.substringAfter('/'))
+            val name = update?.file ?: installFile(store, e.author, e.id.substringAfter('/'), kind)
             withContext(Dispatchers.IO) {
-                // An update keeps its page; a new install goes where the user is.
-                if (update == null) engine.setPage(name, page)
+                // An update keeps its page; a new install goes where the user is. Apps go in the drawer, on no page, and a page
+                // left of page 1, to the empty one waiting there.
+                if (kind == OwlKind.Widget && update == null) engine.setPage(name, page)
                 engine.installDependenciesWhenLoaded(name)
                 File(engine.dir, name).writeBytes(bytes)
             }
@@ -170,8 +213,47 @@ class Market(
         return img
     }
 
+    /** A preview or screen from the current store, by its path in the catalog; null when it can't be loaded. */
+    suspend fun image(path: String): ImageBitmap? {
+        val url = current.base + path
+        synchronized(previews) { if (url in previews) return previews[url] }
+        val img =
+            withContext(Dispatchers.IO) {
+                runCatching { httpGet(url).let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }.getOrNull()
+            }
+        synchronized(previews) { previews[url] = img }
+        return img
+    }
+
+    /**
+     * [e]'s icon at [size] px square, as the drawer draws it: an SVG with `currentColor` in [accent], an image as it is;
+     * null when it has none.
+     */
+    suspend fun icon(
+        e: CatalogEntry,
+        size: Int,
+        accent: Int,
+    ): ImageBitmap? {
+        val remote = e.iconFile?.let { current.base + it }
+        val key = (e.icon ?: remote ?: return null) to (if (e.icon != null) accent else 0)
+        synchronized(icons) { if (key in icons) return icons[key] }
+        val img =
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (e.icon != null) decodeSvgIcon(e.icon!!, size, accent) else decodeImageIcon(httpGet(remote!!), size)
+                }.getOrNull()?.asImageBitmap()
+            }
+        synchronized(icons) { icons[key] = img }
+        return img
+    }
+
+    private var loaded = false
+
     /** Reads the stores and install records; call off the main thread before the store opens. */
+    @Synchronized
     fun load() {
+        if (loaded) return
+        loaded = true
         (Versioned.read(storesRecord.takeIf { it.exists() }?.readText(), STORES_VERSION) as? JSONObject)?.let { data ->
             stores = listOf(Store.BUILT_IN) + data.optJSONArray("stores")?.strings().orEmpty().mapNotNull { Store.parse(it) }.filterNot { it.reviewed }.distinct()
             current = Store.parse(data.optString("current"))?.takeIf { it in stores } ?: Store.BUILT_IN

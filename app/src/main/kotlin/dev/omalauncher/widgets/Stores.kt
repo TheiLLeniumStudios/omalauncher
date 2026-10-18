@@ -1,5 +1,7 @@
 package dev.omalauncher.widgets
 
+import dev.omalauncher.widgets.lang.OwlKind
+
 /**
  * A widget store: a GitHub repo whose CI publishes index.json and the widget files to GitHub Pages,
  * like the built-in one. [repo] is `owner/name` as the user typed it; GitHub ignores case, so equality does too.
@@ -56,8 +58,10 @@ fun installFile(
     store: Store,
     author: String,
     name: String,
+    kind: OwlKind = OwlKind.Widget,
 ): String {
-    if (store.reviewed) return "market-$author-$name.owl"
+    val kindPrefix = if (kind == OwlKind.Widget) "" else "${kind.word}-"
+    if (store.reviewed) return "market-$kindPrefix$author-$name.owl"
     val prefix = store.repo.lowercase().replace(Regex("[^a-z0-9-]"), "-")
-    return "market-$prefix-$author-$name.owl"
+    return "market-$kindPrefix$prefix-$author-$name.owl"
 }
