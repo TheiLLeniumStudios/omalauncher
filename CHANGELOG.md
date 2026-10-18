@@ -25,8 +25,7 @@ Dates are when the build was uploaded to Play.
   mode, an app's long press can remove it from the bar.
 - The weather widget uses your phone's location, asked once, instead of guessing
   it from your IP address, so a VPN no longer moves it; a city you type still wins.
-  Only the bundled weather widget, unchanged, can read it (`android.location`, owl 12, renumbered
-  because upstream took owl 8 to 11).
+  Only the bundled weather widget, unchanged, can read it (`android.location`, owl 8).
 
 ## 0.8.1 (versionCode 16) – 2026-10-17
 

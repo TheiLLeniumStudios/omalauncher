@@ -95,8 +95,9 @@ internal val SINCE =
         listOf("Input.focus", "sh", "corners").associateWith { 6 } +
         // owl 7: more of the phone, without new permissions.
         listOf("android.alarm", "android.modes", "torch", "share", "haptic").associateWith { 7 } +
-        // owl 8: apps, files that aren't tiles; the phone's apps as a list; images and sounds from the web; values in URLs.
-        listOf("app \"…\" { }", "android.apps", WEB_IMAGE, "sound", "enc", "post", "screenInset").associateWith { 8 } +
+        // owl 8: apps, files that aren't tiles; the phone's apps as a list; images and sounds from the web; values in URLs;
+        // and this fork's own android.location, which keeps the level it had before upstream numbered 8 too.
+        listOf("app \"…\" { }", "android.apps", WEB_IMAGE, "sound", "enc", "post", "screenInset", "android.location").associateWith { 8 } +
         // owl 9: dates and numbers as text and back; chance.
         listOf("parseTime", "fmtAgo", "fmtNum", FMT_TIME_ZONE, "random", "shuffle", "hash").associateWith { 9 } +
         // owl 9: lists and maps changed in place of rebuilding them; a trigger for a first value.
@@ -110,9 +111,7 @@ internal val SINCE =
         // owl 11: the coding agents in Linux and the recent strip's apps, for a page with its own prompt bar.
         listOf("android.agents", "android.recent", "open", "ask").associateWith { 11 } +
         // owl 11: fonts of the widget's own, and Canvas text styled like a Text.
-        listOf(FONT_FILE, CANVAS_TEXT_STYLE).associateWith { 11 } +
-        // owl 12: this fork's android.location, after upstream took 8 to 11.
-        listOf("android.location").associateWith { 12 }
+        listOf(FONT_FILE, CANVAS_TEXT_STYLE).associateWith { 11 }
 
 internal const val PAGE_FILE = "page \"…\" { }"
 

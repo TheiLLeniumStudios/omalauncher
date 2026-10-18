@@ -1,6 +1,7 @@
 package dev.omalauncher.widgets.runtime
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationListener
@@ -72,6 +73,8 @@ class Location(
                 listener?.let { runCatching { manager.removeUpdates(it) } }
                 listener = null
             }
+            // [granted] checks ACCESS_COARSE_LOCATION above; lint can't follow it into this local function.
+            @SuppressLint("MissingPermission")
             fun start() {
                 if (listener != null || !granted) return
                 // An explicit object, not a SAM lambda: at minSdk 29 the provider callbacks are still
@@ -127,6 +130,7 @@ class Location(
         )
 
     /** The freshest fix among the enabled providers; a provider that won't answer is skipped. */
+    @SuppressLint("MissingPermission") // Only called while [granted]; lint can't follow that into here.
     private fun best(): android.location.Location? =
         runCatching {
             providers()

@@ -860,12 +860,12 @@ class LangTest {
     }
 
     @Test fun androidLocation() {
-        val p = Compiler.compile("widget {\n meta { owl: 12 }\n source l = android.location\n Text { text: l.available ? \"\${l.lat},\${l.lon}\" : \"no location\" } }")
+        val p = Compiler.compile("widget {\n meta { owl: 8 }\n source l = android.location\n Text { text: l.available ? \"\${l.lat},\${l.lon}\" : \"no location\" } }")
         val src = p.globals[0] as Global.Source
         assertEquals("android.location", src.kind)
         assertTrue(p.commands.single().startsWith("read Android location"))
         assertTrue(!p.needsLinux)
-        assertTrue(compileError("widget {\n meta { owl: 11 }\n source l = android.location\n Text { text: l } }").contains("android.location needs owl 12"))
+        assertTrue(compileError("widget {\n meta { owl: 7 }\n source l = android.location\n Text { text: l } }").contains("android.location needs owl 8"))
     }
 
     @Test fun sliderAndInput() {

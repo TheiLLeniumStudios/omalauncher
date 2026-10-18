@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -139,7 +140,7 @@ private fun LockCover(onUnlock: () -> Unit) {
             delay(60_000 - System.currentTimeMillis() % 60_000)
         }
     }
-    val clock = lockClock(now, DateFormat.is24HourFormat(context), Locale.getDefault())
+    val clock = lockClock(now, DateFormat.is24HourFormat(context), LocalConfiguration.current.locales[0])
     Box(
         Modifier
             .fillMaxSize()
