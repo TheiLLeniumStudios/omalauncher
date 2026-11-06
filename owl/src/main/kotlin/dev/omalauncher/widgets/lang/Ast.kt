@@ -190,6 +190,8 @@ sealed interface Decl {
         override val pos: Int,
         /** `persist`: the value survives restarts. */
         val persist: Boolean = false,
+        /** `secret`: survives restarts encrypted, and only goes into requests. */
+        val secret: Boolean = false,
     ) : Decl
 
     class Let(
@@ -231,8 +233,21 @@ sealed interface Decl {
         val stmts: List<Stmt>,
         override val pos: Int,
         val first: Boolean = false,
+        /** `on feed each { }`: for every message of a ws(...) source. */
+        val each: Boolean = false,
     ) : Decl {
         override val name get() = kind
+    }
+
+    /**
+     * `strings { en { feels: "feels" } id { feels: "terasa" } }` (owl 16): the texts a person reads, per language,
+     * read as `str.feels`; the phone's language picks the set, and en fills in what it lacks.
+     */
+    class Strings(
+        val sets: List<Pair<String, List<Prop>>>,
+        override val pos: Int,
+    ) : Decl {
+        override val name get() = STRINGS
     }
 
     /** `requires { pacman: ["jq"] }`: packages per package manager. */
@@ -244,20 +259,28 @@ sealed interface Decl {
     }
 }
 
+/** The name a widget reads its [Decl.Strings] by: `str.feels`. */
+const val STRINGS = "str"
+
 class WidgetAst(
     val name: String?,
     val body: Body,
-    /** What the file is, from its first word: widget, page or app; see [OwlKind]. */
+    /** What the file is, from its first word: widget, face, app, panel or keys; see [OwlKind]. */
     val kind: OwlKind = OwlKind.Widget,
 )
 
-/** What an owl file is: a home-screen tile, a whole home page, or an app in the drawer. */
+/**
+ * What an owl file is: a home-screen tile, a face (a whole home page), an app in the drawer, a panel a swipe on home
+ * opens, or the extra keys over the soft keyboard while typing in a terminal.
+ */
 enum class OwlKind(
     val word: String,
 ) {
     Widget("widget"),
-    Page("page"),
+    Face("face"),
     App("app"),
+    Panel("panel"),
+    Keybar("keybar"),
     ;
 
     companion object {

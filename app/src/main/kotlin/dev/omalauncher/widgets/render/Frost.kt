@@ -71,7 +71,17 @@ private object FrostCache {
                     CompletableDeferred<ImageBitmap?>().also { made[key] = it } to true
                 }
             }
-        if (mine) job.complete(withContext(Dispatchers.Default) { runCatching { make(file, radius, context) }.getOrNull() })
+        if (mine) {
+            try {
+                job.complete(withContext(Dispatchers.Default) { runCatching { make(file, radius, context) }.getOrNull() })
+            } finally {
+                // Cancelled mid-way (its node left the screen): the next one to ask makes it again, rather than waiting forever.
+                if (!job.isCompleted) {
+                    synchronized(made) { if (made[key] === job) made.remove(key) }
+                    job.complete(null)
+                }
+            }
+        }
         return job.await()
     }
 
@@ -147,7 +157,7 @@ private object FrostCache {
 }
 
 /**
- * `frost` (owl 11): the background behind the node, blurred by that many dp, under the node's own
+ * `frost` (owl 10): the background behind the node, blurred by that many dp, under the node's own
  * background, so `background: alpha(surface, 0.4)` tints it like frosted glass. It blurs the wallpaper,
  * not other nodes, and shows nothing where the launcher draws no wallpaper behind.
  */
@@ -155,9 +165,19 @@ private object FrostCache {
 internal fun Modifier.frost(
     p: Props,
     corner: () -> Float,
+): Modifier = frost(p.observe("frost")?.num() ?: 0.0, corner)
+
+/**
+ * The wallpaper behind, blurred by [dp] (none at 0), within [corner]'s radius in dp, under what's drawn
+ * after it: owl's `frost`, and home's tiles with widgets.frost.
+ */
+@Composable
+fun Modifier.frost(
+    dp: Double,
+    corner: () -> Float,
 ): Modifier {
+    if (!(dp > 0)) return this
     val backdrop = LocalBackdrop.current ?: return this
-    val dp = p.observe("frost")?.num()?.takeIf { it > 0 } ?: return this
     val file = backdrop.file() ?: return this
     val radius = FrostCache.radius(dp, LocalDensity.current.density)
     val context = LocalContext.current

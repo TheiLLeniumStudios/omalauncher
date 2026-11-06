@@ -26,13 +26,18 @@ touches it: `files/omarchy` is `~/.local/share/omarchy` and `files/widgets` is
   mapping, per-surface pixel stores, and compositing them into a window's
   `ANativeWindow`
 - `wayland/`: the Wayland server in Kotlin (wl_compositor, wl_shm,
-  wl_subcompositor, wl_seat, wl_output, xdg_wm_base, xdg-decoration) and
+  wl_subcompositor, wl_seat, wl_output, xdg_wm_base, xdg-decoration, and
+  text-input-v3 for where a client's text cursor is) and
   `WindowRenderer`, which draws one window into its activity's SurfaceView
   (or, for a widget's `Terminal`, into a TextureView in the tile)
 - `linux/`: proot, the rootfs setup and its update steps, pacman, coding
   agents, and the bridges to Android (audio, URLs, /proc)
 - `ui/`: the Compose home screen, the bar and its app list, settings and Files
-- `widgets/`: the widget engine; the language itself is in the `owl` module
+- `widgets/`: the widget engine; the language itself is in the `owl` module.
+  A widget's state and sources live in its `WidgetInstance`, which runs while
+  its page or a neighbour is on screen, but the pager composes only the
+  current page: a node drawn in Kotlin loses its `remember` state when its
+  page is swiped away, and keeps anything lasting in the instance
 - `theme/`: Omarchy themes, applied to the launcher and the guest
 - `upgrade/`: how installs follow app updates (see below)
 
@@ -45,6 +50,23 @@ snapshots the surface tree, redraws only the dirty region of the SurfaceView
 (everything, if a surface moved or appeared), posts, and then sends the frame
 callbacks. Hidden windows get no frame callbacks, so their clients stop
 drawing.
+
+## Browser tiles
+
+A widget's `Browser` node draws an Android System WebView inside the tile
+(`ui/BrowserView.kt`), not a client of the Wayland compositor. Nothing runs in
+the guest, so a file with a Browser needs no Linux, and its frames go into the
+tile the way any other view's do. What the page may reach is decided there and
+nowhere else: https only, no file or content access, script and DOM storage only
+when the node asks for `js`, and no JavaScript bridge. Every Browser in the app
+shares one WebView profile, so cookies and sign-ins are shared between tiles.
+Home's input owner, `TerminalTiles`, takes a Browser tile in as it takes a
+terminal: the page's view takes no touch until the tile is tapped
+(`TileWebView.dispatchTouchEvent` says so), so a swipe still turns the page and
+a long press still lifts the tile. The tap that gives it the tile, a tap
+outside it, a page turn and Back are the same code path a terminal's and a
+widget's text field are, and the page is what the home screen lifts above the
+keyboard. A field in the page keeps the WebView's own IME connection.
 
 ## GPU acceleration
 

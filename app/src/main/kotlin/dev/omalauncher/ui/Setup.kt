@@ -34,6 +34,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import dev.omalauncher.R
 import dev.omalauncher.linux.AGENTS
 import dev.omalauncher.linux.Agent
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,7 +84,9 @@ internal fun SetupScreen(runtime: Runtime) {
             if (error == null) runtime.finishWelcome()
         }
     }
-    Column(Modifier.fillMaxSize().safeDrawingPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+    // Keys start on the picked theme: on the first, the strip would pick that one as focus lands on it.
+    val pickedFocus = remember { FocusRequester() }
+    Column(Modifier.fillMaxSize().safeDrawingPadding().holdsKeys(start = pickedFocus), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
             contentAlignment = Alignment.TopCenter,
@@ -90,7 +98,7 @@ internal fun SetupScreen(runtime: Runtime) {
                 if (started) {
                     ThemeDownloadProgress(themes.choices.firstOrNull { it.name == themes.picked }?.title?.lowercase() ?: themes.picked, error, onRetry = ::fetchTheme, onSkip = runtime::finishWelcome)
                 } else {
-                    Welcome(themes, linux, { linux = !linux }, picked) { bin -> picked = if (bin in picked) picked - bin else picked + bin }
+                    Welcome(themes, pickedFocus, linux, { linux = !linux }, picked) { bin -> picked = if (bin in picked) picked - bin else picked + bin }
                 }
             }
         }
@@ -124,6 +132,7 @@ private fun Wordmark() {
 @Composable
 private fun Welcome(
     themes: ThemeStore,
+    pickedFocus: FocusRequester,
     linux: Boolean,
     onToggleLinux: () -> Unit,
     picked: List<String>,
@@ -132,30 +141,33 @@ private fun Welcome(
     Appear(0) {
         Column {
             Spacer(Modifier.height(10.dp))
-            BasicText("omarchy on your home screen", style = Mono.copy(fontSize = TextSize.Large))
+            BasicText(stringResource(R.string.linux_welcome_title), style = Mono.copy(fontSize = TextSize.Large))
             Spacer(Modifier.height(10.dp))
             BasicText(
-                "Omarchy's themes and wallpapers, your Android apps, and home-screen widgets. Arch Linux adds " +
-                    "terminal apps and coding agents, now or later in settings.",
+                stringResource(R.string.linux_welcome_body),
                 style = Mono.copy(color = Subtle, lineHeight = 20.sp),
             )
         }
     }
     Spacer(Modifier.height(32.dp))
-    // Each theme starts downloading as it's selected, the default one right away.
-    LaunchedEffect(Unit) { themes.prefetch(themes.picked) }
+    // The theme picked starts downloading, the default one right away; another once it stays picked a moment, so
+    // arrowing along the strip doesn't start one for each theme passed (start fetches the picked one anyway).
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(themes.picked) {
+        if (!first) delay(PrefetchSettle)
+        first = false
+        themes.prefetch(themes.picked)
+    }
     Appear(1) {
-        ThemeStrip(themes, onPick = {
-            themes.pick(it)
-            themes.prefetch(it.name)
-        })
+        // A key moving along the strip picks as it goes, as a tap does.
+        ThemeStrip(themes, pickOnFocus = true, pickedFocus = pickedFocus)
     }
     Spacer(Modifier.height(32.dp))
     Appear(2) {
         Column {
-            Label("linux")
+            Label(stringResource(R.string.linux_welcome_linux))
             Spacer(Modifier.height(12.dp))
-            Choice("also set up Arch Linux", "terminal apps, agents, pacman · ~1 GB", linux, onToggleLinux)
+            Choice(stringResource(R.string.linux_welcome_choice), stringResource(R.string.linux_welcome_choice_detail), linux, onToggleLinux)
             if (linux) {
                 Spacer(Modifier.height(24.dp))
                 AgentPicker(picked, onToggle)
@@ -171,14 +183,14 @@ internal fun AgentPicker(
     onToggle: (String) -> Unit,
 ) {
     Column {
-        Label("coding agents")
+        Label(stringResource(R.string.linux_agents_label))
         BasicText(
-            "Pick any to install with Linux. You can add or remove them later in settings.",
+            stringResource(R.string.linux_agents_hint),
             Modifier.padding(top = 4.dp, bottom = 14.dp),
             style = Mono.copy(color = Subtle, fontSize = TextSize.Small),
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (agent in AGENTS) Choice(agent.name, agent.description, agent.bin in picked) { onToggle(agent.bin) }
+            for (agent in AGENTS) Choice(agent.name, stringResource(agent.description), agent.bin in picked) { onToggle(agent.bin) }
         }
     }
 }
@@ -189,14 +201,10 @@ private fun StartButton(
     onStart: () -> Unit,
 ) {
     Column {
-        PrimaryButton(if (linux) "start and set up linux" else "start", onStart)
+        // Keys on it wait out the theme's download, for try again should it fail.
+        PrimaryButton(stringResource(if (linux) R.string.linux_welcome_start_linux else R.string.linux_welcome_start), Modifier.passesKeys(), onStart)
         BasicText(
-            if (linux) {
-                "Linux downloads about 1 GB, so Wi-Fi is best. It installs in the background in 10 to 20 minutes; " +
-                    "the home screen is ready right away."
-            } else {
-                "Downloads the theme's wallpaper now and Omarchy's other themes (about 70 MB) in the background."
-            },
+            stringResource(if (linux) R.string.linux_welcome_start_linux_hint else R.string.linux_welcome_start_hint),
             Modifier.padding(top = 10.dp).fillMaxWidth(),
             style = Mono.copy(color = Subtle, fontSize = TextSize.Small, lineHeight = 16.sp),
         )
@@ -213,26 +221,26 @@ private fun ThemeDownloadProgress(
 ) {
     Spacer(Modifier.height(10.dp))
     BasicText(
-        if (error != null) "the theme didn't download" else "getting $theme",
+        if (error != null) stringResource(R.string.linux_welcome_theme_failed) else stringResource(R.string.linux_welcome_getting, theme),
         style = Mono.copy(fontSize = TextSize.Large, color = if (error != null) Palette.red else Palette.foreground),
     )
     Spacer(Modifier.height(28.dp))
     StageRow(
-        label = "download its wallpaper",
+        label = stringResource(R.string.linux_welcome_wallpaper),
         status = if (error != null) StageStatus.Failed else StageStatus.Running,
         detail = error,
         progress = null,
     )
     if (error != null) {
         Spacer(Modifier.height(28.dp))
-        PrimaryButton("try again", onRetry)
+        PrimaryButton(stringResource(R.string.linux_try_again), Modifier.takesPassedKeys().passesKeys(), onRetry)
         BasicText(
-            "continue without wallpapers",
+            stringResource(R.string.linux_welcome_skip),
             Modifier.padding(top = 16.dp).clickable(onClick = onSkip),
             style = Mono.copy(color = Palette.accent, fontSize = TextSize.Body),
         )
         BasicText(
-            "The theme's colors apply anyway. The launcher tries again later, or download them in settings › style.",
+            stringResource(R.string.linux_welcome_skip_hint),
             Modifier.padding(top = 6.dp),
             style = Mono.copy(color = Subtle, fontSize = TextSize.Small, lineHeight = 16.sp),
         )
@@ -279,10 +287,11 @@ private fun Check(on: Boolean) {
 @Composable
 internal fun PrimaryButton(
     label: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .frame(0.dp, Palette.accent, Palette.accent, radius = 14.dp)
             .clickable(onClick = onClick)
@@ -299,13 +308,15 @@ internal fun LinuxProgress(
     state: LinuxState,
     agents: List<Agent>,
     onRetry: () -> Unit,
+    /** Stops the install and deletes what it put on disk; null once it can't be (an update of an installed system). */
+    onCancel: (() -> Unit)?,
 ) {
     val failed = state as? LinuxState.Failed
     val working = state as? LinuxState.Installing
     val current = working?.stage ?: failed?.stage ?: Stage.Download
     val log = working?.log ?: failed?.log.orEmpty()
     BasicText(
-        if (failed != null) "setup stopped" else "setting up linux",
+        stringResource(if (failed != null) R.string.linux_progress_stopped else R.string.linux_progress_title),
         style = Mono.copy(fontSize = TextSize.Large, color = if (failed != null) Palette.red else Palette.foreground),
     )
     Spacer(Modifier.height(24.dp))
@@ -320,7 +331,7 @@ internal fun LinuxProgress(
                     else -> StageStatus.Running
                 }
             StageRow(
-                label = if (stage == Stage.Agents) "install ${agents.joinToString { it.name }}" else stage.label,
+                label = if (stage == Stage.Agents) stringResource(R.string.linux_stage_agents_named, agents.joinToString { it.name }) else stringResource(stage.label),
                 status = status,
                 detail = working?.takeIf { stage == current }?.step ?: failed?.takeIf { stage == current }?.message,
                 progress = working?.takeIf { stage == current }?.progress,
@@ -329,13 +340,17 @@ internal fun LinuxProgress(
     }
     Spacer(Modifier.height(24.dp))
     if (failed != null) {
-        PrimaryButton("try again", onRetry)
+        PrimaryButton(stringResource(R.string.linux_try_again), Modifier.takesPassedKeys().passesKeys(), onRetry)
+        Spacer(Modifier.height(16.dp))
+    }
+    if (onCancel != null) {
+        BracketAction(stringResource(R.string.linux_cancel_install), Palette.red, Modifier.takesPassedKeys().passesKeys(), onCancel)
         Spacer(Modifier.height(16.dp))
     }
     LogTail(log, expandedByDefault = failed != null)
     if (failed == null) {
         BasicText(
-            "You can close this and use the launcher; setup keeps going in the background.",
+            stringResource(R.string.linux_progress_background),
             Modifier.padding(top = 16.dp),
             style = Mono.copy(color = Subtle, fontSize = TextSize.Small),
         )
@@ -423,9 +438,9 @@ private fun LogTail(
             .padding(12.dp),
     ) {
         Row {
-            Label("output")
+            Label(stringResource(R.string.linux_output))
             Spacer(Modifier.weight(1f))
-            BasicText(if (expanded) "less" else "more", style = Mono.copy(color = Palette.accent, fontSize = TextSize.Small))
+            BasicText(stringResource(if (expanded) R.string.linux_output_less else R.string.linux_output_more), style = Mono.copy(color = Palette.accent, fontSize = TextSize.Small))
         }
         Spacer(Modifier.height(6.dp))
         for (line in log.takeLast(if (expanded) 40 else 3)) {
@@ -446,13 +461,16 @@ internal fun ThemeStrip(
     gutter: Dp = Gutter,
     onPick: (BundledTheme) -> Unit = themes::pick,
     onBrowse: (() -> Unit)? = null,
+    pickOnFocus: Boolean = false,
+    /** Gives keys the picked theme's swatch. */
+    pickedFocus: FocusRequester? = null,
 ) {
     RescanThemes(themes)
     val list = themes.choices
     if (list.isEmpty()) return
     Column {
         Row {
-            Label("theme")
+            Label(stringResource(R.string.linux_theme_label))
             Spacer(Modifier.weight(1f))
             BasicText(
                 list.firstOrNull { it.name == themes.picked }?.title?.lowercase().orEmpty(),
@@ -468,7 +486,10 @@ internal fun ThemeStrip(
             contentPadding = PaddingValues(horizontal = gutter),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(list, key = { it.name }) { theme -> ThemeSwatch(theme, theme.name == themes.picked) { onPick(theme) } }
+            items(list, key = { it.name }) { theme ->
+                val selected = theme.name == themes.picked
+                ThemeSwatch(theme, selected, pickOnFocus, pickedFocus) { onPick(theme) }
+            }
             if (onBrowse != null) item(key = "browse") { BrowseSwatch(onBrowse) }
         }
     }
@@ -479,14 +500,25 @@ internal fun ThemeStrip(
 private fun ThemeSwatch(
     theme: BundledTheme,
     selected: Boolean,
+    pickOnFocus: Boolean,
+    /** The picked theme's swatch, which keys start on. */
+    picked: FocusRequester?,
     onClick: () -> Unit,
 ) {
+    val view = LocalView.current
     fun color(key: String) = hexColor(theme.colors[key]) ?: Color.Gray
     val border by animateColorAsState(if (selected) Palette.accent else Palette.border, label = "swatch")
     Column(
         Modifier
             .width(112.dp)
             .frame(if (selected) 2.dp else 1.dp, border, color("background"), radius = 12.dp)
+            .then(if (selected && picked != null) Modifier.focusRequester(picked) else Modifier)
+            .onFocusChanged {
+                if (!pickOnFocus || !it.isFocused || selected) return@onFocusChanged
+                // Only as keys move it: as setup first shows, Android gives the strip's first swatch focus by itself,
+                // which goes on to the picked one for keys to start on.
+                if (focusFromKey()) onClick() else view.post { picked?.requestFocus() }
+            }
             .clickable(onClick = onClick)
             .padding(10.dp),
     ) {
@@ -510,7 +542,7 @@ private fun BrowseSwatch(onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(10.dp),
     ) {
-        BasicText("more themes ›", style = Mono.copy(color = Palette.accent, fontSize = TextSize.Small), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        BasicText(stringResource(R.string.linux_more_themes), style = Mono.copy(color = Palette.accent, fontSize = TextSize.Small), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             repeat(5) { Box(Modifier.size(width = 14.dp, height = 6.dp).background(Palette.border)) }
@@ -550,4 +582,7 @@ private val Subtle get() = Palette.foreground.copy(alpha = 0.6f)
 
 /** Side padding of the setup screens. */
 private val Gutter = 24.dp
+
+/** How long a theme stays picked in setup before its download starts. */
+private const val PrefetchSettle = 700L
 

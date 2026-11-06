@@ -5,12 +5,16 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import dev.omalauncher.ui.WidgetAsks
 import dev.omalauncher.ui.OwlAppWindow
 import dev.omalauncher.ui.Palette
-import dev.omalauncher.ui.applySystemBars
+import dev.omalauncher.ui.holdsKeys
+import dev.omalauncher.ui.showStatusBar
 import dev.omalauncher.widgets.render.LocalInputFocus
 
 /**
@@ -19,8 +23,8 @@ import dev.omalauncher.widgets.render.LocalInputFocus
  * or the app going away (removed, or no longer compiling), closes the task.
  */
 class OwlAppActivity : InstantActivity() {
-    private val runtime get() = (application as App).runtime
     private var name: String? = null
+    private val asks = WidgetAsks(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,9 +35,7 @@ class OwlAppActivity : InstantActivity() {
             return
         }
         this.name = name
-        applySystemBars(this, Palette.isLight)
         setInstantContent {
-            LaunchedEffect(Palette.isLight) { applySystemBars(this@OwlAppActivity, Palette.isLight) }
             LaunchedEffect(name) { runtime.widgets.appCloses.collect { if (it == name) closeInstantly() } }
             val (spec, inst) =
                 runtime.widgets.appInstance(name) ?: run {
@@ -42,9 +44,13 @@ class OwlAppActivity : InstantActivity() {
                 }
             val icon = runtime.owlIcon(spec, mono = false)
             LaunchedEffect(spec.name, icon, Palette.accent) { describeTask(spec.name, icon?.asAndroidBitmap()) }
+            // `statusBar: false` hides the status bar while the app shows, as on a face; a swipe down brings it back for a moment.
+            val statusBar = inst.showsStatusBar()
+            LaunchedEffect(statusBar) { showStatusBar(this@OwlAppActivity, statusBar) }
             // While the app's `back` holds, Back goes up a level inside it; otherwise Back leaves it.
             BackHandler { if (!inst.goUp()) backInstantly() }
-            CompositionLocalProvider(LocalInputFocus provides true) { OwlAppWindow(spec, inst) }
+            // Keys start in it, and an arrow after a tap starts there again.
+            CompositionLocalProvider(LocalInputFocus provides true) { Box(Modifier.holdsKeys()) { OwlAppWindow(spec, inst) } }
         }
     }
 
@@ -52,6 +58,16 @@ class OwlAppActivity : InstantActivity() {
         super.onStart()
         name?.let(runtime.widgets::appStarted)
         runtime.screenStarted()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        asks.resumed(runtime)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        asks.paused(runtime)
     }
 
     override fun onStop() {

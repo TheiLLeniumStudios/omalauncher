@@ -55,6 +55,7 @@ class Location(
         val fix = best() ?: return unavailable()
         return Obj(
             mapOf(
+                "granted" to bool(true),
                 "available" to bool(true),
                 "lat" to Num(fix.latitude),
                 "lon" to Num(fix.longitude),
@@ -120,6 +121,7 @@ class Location(
     private fun unavailable() =
         Obj(
             mapOf(
+                "granted" to bool(granted),
                 "available" to bool(false),
                 "lat" to Null,
                 "lon" to Null,

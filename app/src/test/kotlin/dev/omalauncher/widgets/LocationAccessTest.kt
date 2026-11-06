@@ -3,7 +3,7 @@ package dev.omalauncher.widgets
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
 import dev.omalauncher.widgets.lang.Value
-import dev.omalauncher.widgets.market.Review
+import dev.omalauncher.widgets.lang.sha256Hex
 import dev.omalauncher.widgets.runtime.Services
 import dev.omalauncher.widgets.runtime.WithoutLocation
 import dev.omalauncher.widgets.runtime.mayLocate
@@ -21,23 +21,23 @@ class LocationAccessTest {
     private val today = File("src/main/assets/widgets/10-today.owl").readBytes()
 
     /** What the launcher ships, by file name: the SHA-256 of each bundled widget. */
-    private val bundled = mapOf("10-today.owl" to setOf(Review.sha256(today)))
+    private val bundled = mapOf("10-today.owl" to setOf(sha256Hex(today)))
 
     @Test fun theBundledWeatherWidgetAsShippedMayLocate() {
-        assertTrue(mayLocate("10-today.owl", Review.sha256(today), bundled))
+        assertTrue(mayLocate("10-today.owl", sha256Hex(today), bundled))
     }
 
     /** A guest command can rewrite the file under the bundled name; then it's not the launcher's widget any more. */
     @Test fun anEditedBundledWidgetMayNot() {
         val edited = today + "\n// sends it elsewhere\n".toByteArray()
-        assertFalse(mayLocate("10-today.owl", Review.sha256(edited), bundled))
+        assertFalse(mayLocate("10-today.owl", sha256Hex(edited), bundled))
     }
 
     /** Copied under another name, from a store, a shared link or by hand: never. */
     @Test fun anyOtherWidgetMayNot() {
-        assertFalse(mayLocate("market-simon-weather.owl", Review.sha256(today), bundled))
-        assertFalse(mayLocate("shared-weather.owl", Review.sha256(today), bundled))
-        assertFalse(mayLocate("my-weather.owl", Review.sha256(today), bundled))
+        assertFalse(mayLocate("market-simon-weather.owl", sha256Hex(today), bundled))
+        assertFalse(mayLocate("shared-weather.owl", sha256Hex(today), bundled))
+        assertFalse(mayLocate("my-weather.owl", sha256Hex(today), bundled))
         assertFalse(mayLocate("10-today.owl", null, bundled))
     }
 

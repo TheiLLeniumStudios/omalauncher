@@ -43,6 +43,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.omalauncher.theme.ThemeStore
@@ -180,7 +181,7 @@ private fun LockCover(onUnlock: () -> Unit) {
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                BasicText("enter password", style = palette.mono.copy(color = palette.muted, fontSize = TextSize.Large))
+                BasicText(stringResource(R.string.lock_enter_password), style = palette.mono.copy(color = palette.muted, fontSize = TextSize.Large))
             }
         }
         battery?.let {

@@ -1,6 +1,7 @@
 package dev.omalauncher.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,11 +50,15 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.omalauncher.R
 import dev.omalauncher.linux.Agent
 import dev.omalauncher.widgets.Market
+import dev.omalauncher.widgets.StoreMessage
 import dev.omalauncher.widgets.WidgetEngine
 import dev.omalauncher.widgets.lang.OwlKind
 import dev.omalauncher.widgets.market.Catalog
@@ -61,11 +66,11 @@ import dev.omalauncher.widgets.market.CatalogEntry
 import kotlinx.coroutines.launch
 
 /**
- * The store, with a toggle between widgets, pages and apps. Widgets: built-in terminal tiles (a plain shell,
+ * The store, with a toggle between widgets, faces and apps. Widgets: built-in terminal tiles (a plain shell,
  * and one per installed coding agent), then reviewed widgets from the marketplace repo as a grid of
- * previews, with search and category tabs (and one for the newest). Pages and apps: the reviewed ones, the same way.
+ * previews, with search and category tabs (and one for the newest). Faces and apps: the reviewed ones, the same way.
  * Tapping one opens its page, which shows what it installs and runs; from there a widget goes on the current page,
- * a page left of page 1 and an app in the drawer (or any of them updates).
+ * a face left of page 1 and an app in the drawer (or any of them updates). An installed app opens from its page too.
  */
 @Composable
 fun StoreScreen(
@@ -77,12 +82,14 @@ fun StoreScreen(
     onDismiss: () -> Unit,
     /** The kind it opens on. */
     initialKind: OwlKind = OwlKind.Widget,
+    /** Opens the installed app in this file, as the drawer does. */
+    onOpenApp: (String) -> Unit = {},
 ) {
     var kind by remember { mutableStateOf(initialKind) }
     val market = engine.market(kind)
     val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf<String?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<StoreMessage?>(null) }
     // Each kind keeps its search, tab and scroll while the other shows.
     val filters = remember { OwlKind.entries.associateWith { StoreFilter() } }
     val filter = filters.getValue(kind)
@@ -98,12 +105,12 @@ fun StoreScreen(
         // On its own, an entry's page takes the header: a chevron back to the grid and its name, nothing else.
         val alone = detail?.takeIf { !wide }
         OverlayPanel(
-            alone?.name ?: "store",
+            alone?.name ?: stringResource(R.string.store_title),
             onDismiss,
             onBack = if (alone != null) back else LocalPanelBack.current,
             actions = {
                 if (alone == null) {
-                    KindToggle(kind) {
+                    KindToggle(kind, engine.markets.map { it.kind }) {
                         kind = it
                         open = null
                         message = null
@@ -114,6 +121,8 @@ fun StoreScreen(
         ) {
             BoxWithConstraints {
                 val paneWidth = (maxWidth * 0.42f).coerceIn(340.dp, 520.dp)
+                // Side by side, the pane is never empty: until one is tapped, the grid's first entry shows in it.
+                val picked = if (wide) detail ?: shownEntries(market, filter).firstOrNull() else detail
                 val select = { id: String ->
                     open = id
                     message = null
@@ -126,6 +135,8 @@ fun StoreScreen(
                     message = null
                 }
                 val showDetail = @Composable { e: CatalogEntry, modifier: Modifier ->
+                    // Acting on the preselected entry picks it, so its message stays with it when the grid's first entry changes.
+                    val pick = { open = e.id }
                     Detail(
                         market = market,
                         e = e,
@@ -134,17 +145,28 @@ fun StoreScreen(
                         page = page,
                         message = message,
                         modifier = modifier,
+                        onOpen = { market.installedVersion(e)?.let { onOpenApp(it.file) } },
                         onInstall = {
+                            pick()
                             scope.launch {
                                 message = market.install(e, page)
-                                // A widget closes the store to show it on its page; an app or a page stays, its page saying where it went.
+                                // A widget closes the store to show it on its page; an app or a face stays, its page saying where it went.
                                 if (message == null && market.kind == OwlKind.Widget) onDismiss()
                             }
+                        },
+                        onAddPages = {
+                            pick()
+                            scope.launch { message = market.addPages(e) }
+                        },
+                        onRemove = {
+                            pick()
+                            message = null
+                            market.remove(e)
                         },
                     )
                 }
                 val list = @Composable { modifier: Modifier ->
-                    StoreList(engine, market, agents, page, theme, filter, if (wide) open else null, modifier, select, onStore, onDismiss)
+                    StoreList(engine, market, agents, page, theme, filter, if (wide) picked?.id else null, modifier, select, onStore, onDismiss)
                 }
                 when {
                     // Side by side: the grid, and the picked widget's page beside it.
@@ -153,11 +175,11 @@ fun StoreScreen(
                             list(Modifier.weight(1f))
                             Box(Modifier.padding(horizontal = 12.dp).width(1.dp).fillMaxHeight().background(Palette.border))
                             val pane = Modifier.width(paneWidth).fillMaxHeight()
-                            if (detail != null) {
-                                showDetail(detail, pane)
+                            if (picked != null) {
+                                showDetail(picked, pane)
                             } else {
                                 Box(pane, contentAlignment = Alignment.Center) {
-                                    BasicText("pick ${if (kind == OwlKind.App) "an app" else "a ${kind.word}"} to see what it installs and runs", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                                    BasicText(stringResource(pickText(kind)), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
                                 }
                             }
                         }
@@ -172,21 +194,24 @@ fun StoreScreen(
     }
 }
 
-/** Widgets, pages or apps: segments in the store's header, the shown one filled. */
+/** Widgets, faces or apps: segments in the store's header, the shown one filled. */
 @Composable
 private fun KindToggle(
     kind: OwlKind,
+    /** The kinds the store has; panels have none. */
+    kinds: List<OwlKind>,
     onPick: (OwlKind) -> Unit,
 ) {
-    Row(Modifier.padding(end = 4.dp).frame(1.dp, Palette.border, radius = 14.dp).clip(RoundedCornerShape(14.dp))) {
-        for (k in OwlKind.entries) {
-            val label = "${k.word}s"
+    Row(Modifier.padding(end = 4.dp).frame(1.dp, Palette.border, radius = 14.dp)) {
+        for (k in kinds) {
+            val label = stringResource(kindPlural(k))
             val on = k == kind
             BasicText(
                 label,
                 Modifier
                     .background(if (on) Palette.accent.copy(alpha = 0.15f) else Color.Transparent)
-                    .clickable(enabled = !on) { onPick(k) }
+                    // The shown one still takes a tap, doing nothing, so keys on it as it's picked stay there.
+                    .clickable { if (!on) onPick(k) }
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 style = Mono.copy(color = if (on) Palette.accent else Palette.muted, fontSize = TextSize.Small),
             )
@@ -217,8 +242,8 @@ private fun StoreList(
     onDismiss: () -> Unit,
 ) {
     val apps = market.kind == OwlKind.App
-    // Pages get a "new" tab like widgets; apps have never had one.
-    val noun = "${market.kind.word}s"
+    // Faces get a "new" tab like widgets; apps have never had one.
+    val noun = stringResource(kindPlural(market.kind))
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     Column(modifier) {
@@ -235,32 +260,20 @@ private fun StoreList(
                     .sortedWith(compareBy({ -it.value }, { known(it.key) }, { it.key }))
                     .forEach { (c, n) -> add(c to n) }
                 market.entries.count { it.category == null }.takeIf { it > 0 }?.let { add(OTHER to it) }
-                if (installed.isNotEmpty()) add(INSTALLED to installed.size)
+                // There even when nothing is, as "new" is, so each kind's store has the same tabs.
+                add(INSTALLED to installed.size)
             }
         val q = filter.query.trim().lowercase()
-        // In the catalog's order, which the store repo sets in order.txt.
-        val shown =
-            market.entries
-                .filter { e ->
-                    when (filter.tab) {
-                        ALL -> true
-                        NEW -> e.new
-                        INSTALLED -> e in installed
-                        OTHER -> e.category == null
-                        else -> e.category == filter.tab
-                    }
-                }.filter { e -> q.isEmpty() || listOf(e.name, e.description, e.author, e.category.orEmpty()).any { q in it.lowercase() } }
-                // Newest first; a stable sort, so a day's widgets keep the catalog's order.
-                .let { l -> if (filter.tab == NEW) l.sortedByDescending { it.added } else l }
+        val shown = shownEntries(market, filter)
         val updates = installed.count { market.hasUpdate(it) }
 
         StoreChips(market, onStore)
-        SearchField(filter.query, { filter.query = it }, onGo = { keyboard?.hide() }, placeholder = "search ${market.entries.size} $noun")
+        SearchField(filter.query, { filter.query = it }, onGo = { keyboard?.hide() }, placeholder = stringResource(R.string.store_search, market.entries.size, noun))
         Spacer(Modifier.height(8.dp))
         // Scrolls under the panel's padding, up to its frame or, side by side, the divider.
         Row(Modifier.bleed(PanelPadding).horizontalScroll(rememberScrollState()).padding(horizontal = PanelPadding), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for ((name, n) in tabs) {
-                val label = if (name == INSTALLED && updates > 0) "$name $n · $updates↑" else "$name $n"
+                val label = if (name == INSTALLED && updates > 0) stringResource(R.string.store_tab_updates, tabName(name), n, updates) else stringResource(R.string.store_tab, tabName(name), n)
                 Chip(label, selected = filter.tab == name) { filter.tab = name }
             }
         }
@@ -273,25 +286,36 @@ private fun StoreList(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (market.kind == OwlKind.Widget && filter.tab == ALL && q.isEmpty()) {
-                item(key = "builtin", span = { GridItemSpan(maxLineSpan) }) { Caption("built in") }
-                item(key = "terminal") {
-                    BuiltInEntry("terminal", "6x4 · a shell", added = false, page = page) {
-                        scope.launch {
-                            engine.addTerminalWidget(page)
-                            onDismiss()
-                        }
-                    }
-                }
-                items(agents, key = { "agent:" + it.bin }) { agent ->
-                    BuiltInEntry(
-                        agent.name,
-                        "6x6 · runs ${agent.launch}",
-                        added = engine.hasAgentWidget(agent),
-                        page = page,
-                    ) {
-                        scope.launch {
-                            engine.addAgentWidget(agent, page)
-                            onDismiss()
+                // One row that scrolls sideways, so a long list of agents doesn't push the catalog off the screen.
+                item(key = "builtin", span = { GridItemSpan(maxLineSpan) }) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Caption(stringResource(R.string.store_builtin))
+                        // Scrolls under the panel's padding, as the tabs do.
+                        Row(
+                            Modifier.bleed(PanelPadding).horizontalScroll(rememberScrollState()).padding(horizontal = PanelPadding),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            BuiltInEntry(stringResource(R.string.store_terminal), stringResource(R.string.store_terminal_details), added = false, page = page) {
+                                scope.launch {
+                                    engine.addTerminalWidget(page)
+                                    onDismiss()
+                                }
+                            }
+                            for (agent in agents) {
+                                key(agent.bin) {
+                                    BuiltInEntry(
+                                        agent.name,
+                                        stringResource(R.string.store_agent_details, agent.command),
+                                        added = engine.hasAgentWidget(agent),
+                                        page = page,
+                                    ) {
+                                        scope.launch {
+                                            engine.addAgentWidget(agent, page)
+                                            onDismiss()
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -300,12 +324,12 @@ private fun StoreList(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val store = market.current
                     if (store.reviewed) {
-                        Caption("reviewed $noun from github.com/${store.repo}")
+                        Caption(stringResource(R.string.store_reviewed, noun, store.repo))
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.weight(1f)) { Caption("$noun from github.com/${store.repo}, published without review") }
+                            Box(Modifier.weight(1f)) { Caption(stringResource(R.string.store_unreviewed, noun, store.repo)) }
                             // What was installed from it stays.
-                            BracketAction("remove", Palette.red) {
+                            BracketAction(stringResource(R.string.store_remove), Palette.red) {
                                 market.removeStore(store)
                                 onStore()
                                 scope.launch { market.refresh() }
@@ -313,11 +337,12 @@ private fun StoreList(
                         }
                     }
                     when {
-                        market.loading && market.entries.isEmpty() -> BasicText("loading…", style = Mono.copy(color = Palette.muted))
-                        market.error != null && market.entries.isEmpty() -> BasicText(market.error.orEmpty(), style = Mono.copy(color = Palette.red))
-                        market.entries.isEmpty() -> BasicText("no $noun yet", style = Mono.copy(color = Palette.muted))
-                        shown.isEmpty() && q.isEmpty() && filter.tab == NEW -> BasicText("no new $noun", style = Mono.copy(color = Palette.muted))
-                        shown.isEmpty() -> BasicText("nothing matches \"${filter.query.trim()}\"", style = Mono.copy(color = Palette.muted))
+                        market.loading && market.entries.isEmpty() -> BasicText(stringResource(R.string.store_loading), style = Mono.copy(color = Palette.muted))
+                        market.error != null && market.entries.isEmpty() -> BasicText(market.error?.resolve().orEmpty(), style = Mono.copy(color = Palette.red))
+                        market.entries.isEmpty() -> BasicText(stringResource(R.string.store_empty, noun), style = Mono.copy(color = Palette.muted))
+                        shown.isEmpty() && q.isEmpty() && filter.tab == NEW -> BasicText(stringResource(R.string.store_no_new, noun), style = Mono.copy(color = Palette.muted))
+                        shown.isEmpty() && q.isEmpty() && filter.tab == INSTALLED -> BasicText(stringResource(R.string.store_none_installed, noun), style = Mono.copy(color = Palette.muted))
+                        shown.isEmpty() -> BasicText(stringResource(R.string.store_no_match, filter.query.trim()), style = Mono.copy(color = Palette.muted))
                     }
                 }
             }
@@ -326,12 +351,82 @@ private fun StoreList(
     }
 }
 
+/** The entries [filter]'s tab and search leave of [market]'s, in the order the grid shows them. */
+private fun shownEntries(
+    market: Market,
+    filter: StoreFilter,
+): List<CatalogEntry> {
+    val q = filter.query.trim().lowercase()
+    // In the catalog's order, which the store repo sets in order.txt.
+    return market.entries
+        .filter { e ->
+            when (filter.tab) {
+                ALL -> true
+                NEW -> e.new
+                INSTALLED -> market.installedVersion(e) != null
+                OTHER -> e.category == null
+                else -> e.category == filter.tab
+            }
+        }.filter { e -> q.isEmpty() || listOf(e.name, e.description, e.author, e.category.orEmpty()).any { q in it.lowercase() } }
+        // Newest first; a stable sort, so a day's widgets keep the catalog's order.
+        .let { l -> if (filter.tab == NEW) l.sortedByDescending { it.added } else l }
+}
+
 private const val ALL = "all"
 private const val NEW = "new"
 private const val OTHER = "other"
 private const val INSTALLED = "installed"
 
+/** A tab's name: one of the store's own, or a category as the catalog names it. */
+@Composable
+private fun tabName(tab: String) =
+    when (tab) {
+        ALL -> stringResource(R.string.store_tab_all)
+        NEW -> stringResource(R.string.store_tab_new)
+        OTHER -> stringResource(R.string.store_category_other)
+        INSTALLED -> stringResource(R.string.store_tab_installed)
+        else -> tab
+    }
+
+/** What [kind]s are called, as the store lists them. */
+@StringRes
+private fun kindPlural(kind: OwlKind) =
+    when (kind) {
+        OwlKind.Widget -> R.string.store_kind_widgets
+        OwlKind.Face -> R.string.store_kind_faces
+        OwlKind.App -> R.string.store_kind_apps
+        OwlKind.Panel -> R.string.store_kind_panels
+        OwlKind.Keybar -> R.string.store_kind_keybars
+    }
+
+/** What one [kind] is called. */
+@StringRes
+internal fun kindName(kind: OwlKind) =
+    when (kind) {
+        OwlKind.Widget -> R.string.store_kind_widget
+        OwlKind.Face -> R.string.store_kind_face
+        OwlKind.App -> R.string.store_kind_app
+        OwlKind.Panel -> R.string.store_kind_panel
+        OwlKind.Keybar -> R.string.store_kind_keybar
+    }
+
+@StringRes
+private fun pickText(kind: OwlKind) =
+    when (kind) {
+        OwlKind.Widget -> R.string.store_pick_widget
+        OwlKind.Face -> R.string.store_pick_face
+        OwlKind.App -> R.string.store_pick_app
+        OwlKind.Panel -> R.string.store_pick_panel
+        OwlKind.Keybar -> R.string.store_pick_keybar
+    }
+
+@Composable
+private fun StoreMessage.resolve() = if (arg == null) stringResource(text) else stringResource(text, arg)
+
 private val CardIconSize = 32.dp
+
+/** A built-in entry's width, room for "tap to add to page 10". */
+private val BuiltInWidth = 180.dp
 private val DetailIconSize = 48.dp
 
 /** How tall an entry's page shows its preview and screens, so its description stays in view. */
@@ -385,8 +480,8 @@ private fun StoreChips(
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SearchField(input, { input = it }, onGo = add, placeholder = "owner/repo or URL", modifier = Modifier.weight(1f))
-            BracketAction(if (checking) "checking…" else "add", Palette.accent, add)
+            SearchField(input, { input = it }, onGo = add, placeholder = stringResource(R.string.store_add_placeholder))
+            BracketAction(stringResource(if (checking) R.string.store_checking else R.string.store_add), Palette.accent, onClick = add)
         }
         error?.let { BasicText(it, style = Mono.copy(color = Palette.red, fontSize = TextSize.Small)) }
     }
@@ -409,7 +504,7 @@ private fun Chip(
     )
 }
 
-/** A built-in entry, a grid cell of its own: a terminal tile, plain or running an agent's CLI, straight from the launcher rather than the catalog. */
+/** A built-in entry, a card in the built-in row: a terminal tile, plain or running an agent's CLI, straight from the launcher rather than the catalog. */
 @Composable
 private fun BuiltInEntry(
     name: String,
@@ -420,7 +515,7 @@ private fun BuiltInEntry(
 ) {
     Column(
         Modifier
-            .fillMaxWidth()
+            .width(BuiltInWidth)
             .frame(1.dp, Palette.border, radius = 12.dp)
             .clickable(enabled = !added, onClick = onAdd)
             .padding(8.dp),
@@ -430,9 +525,9 @@ private fun BuiltInEntry(
         BasicText(name, style = Mono.copy(fontSize = TextSize.Body), maxLines = 1, overflow = TextOverflow.Ellipsis)
         BasicText(details, style = small, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (added) {
-            BasicText("✓ on home", style = small.copy(color = Palette.green), maxLines = 1)
+            BasicText(stringResource(R.string.store_on_home), style = small.copy(color = Palette.green), maxLines = 1)
         } else {
-            BasicText("tap to add to page $page", style = small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(stringResource(R.string.store_tap_to_add, page), style = small, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -460,6 +555,27 @@ private fun rememberIcon(
     return icon
 }
 
+/**
+ * [e]'s preview the size a card draws it. Cards are at least 150 dp wide and, with an adaptive grid, under twice that and the gap;
+ * less their padding, a preview is [CardPreviewWidth] at most and [CardPreviewHeight] high, and a whole screen shows
+ * its top [CardPreviewHeight] / [CardPreviewMinWidth] of its width at most.
+ */
+@Composable
+private fun rememberCardPreview(
+    market: Market,
+    e: CatalogEntry,
+    theme: String?,
+): ImageBitmap? {
+    val (w, h) = with(LocalDensity.current) { CardPreviewWidth.roundToPx() to CardPreviewHeight.roundToPx() }
+    val top = if (market.kind == OwlKind.Widget) null else CardPreviewHeight / CardPreviewMinWidth
+    val preview by produceState<ImageBitmap?>(null, e.previewFor(theme), w, h) { value = market.thumbnail(e, theme, w, h, top) }
+    return preview
+}
+
+private val CardPreviewHeight = 104.dp
+private val CardPreviewMinWidth = 150.dp - 16.dp
+private val CardPreviewWidth = 150.dp * 2 + 8.dp - 16.dp
+
 /** A grid cell: the preview, the name, and whether it's installed; [selected] while its page shows beside the grid. */
 @Composable
 private fun Card(
@@ -470,7 +586,7 @@ private fun Card(
     selected: Boolean,
     onOpen: () -> Unit,
 ) {
-    val preview = rememberPreview(market, e, theme)
+    val preview = rememberCardPreview(market, e, theme)
     val busy = market.busy(e)
     val update = market.hasUpdate(e)
     val installed = market.installedVersion(e) != null
@@ -482,9 +598,9 @@ private fun Card(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(Modifier.fillMaxWidth().height(104.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(CardPreviewHeight), contentAlignment = Alignment.Center) {
             if (preview != null && market.kind != OwlKind.Widget) {
-                // A whole phone screen would be a sliver this high: its top, as wide as the card, reads as the app or page.
+                // A whole phone screen would be a sliver this high: its top, as wide as the card, reads as the app or face.
                 Image(preview, null, Modifier.fillMaxSize(), alignment = Alignment.TopCenter, contentScale = ContentScale.FillWidth)
             } else if (preview != null) {
                 Image(preview, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
@@ -496,12 +612,12 @@ private fun Card(
         }
         val (status, color) =
             when {
-                busy != null -> busy to Palette.accent
-                update -> "update available" to Palette.accent
-                installed -> "✓ installed" to Palette.green
-                !e.supported -> "needs a newer launcher" to Palette.red
-                !linux && e.needsLinux -> "needs linux" to Palette.muted
-                else -> "${e.category ?: OTHER}${e.size?.let { " · ${it.first}x${it.second}" } ?: ""}" to Palette.muted
+                busy != null -> stringResource(busy) to Palette.accent
+                update -> stringResource(R.string.store_update_available) to Palette.accent
+                installed -> stringResource(R.string.store_installed) to Palette.green
+                !e.supported -> stringResource(R.string.store_needs_newer) to Palette.red
+                !linux && e.needsLinux -> stringResource(R.string.store_needs_linux) to Palette.muted
+                else -> "${category(e)}${e.size?.let { " · ${it.first}x${it.second}" } ?: pagesText(e)}" to Palette.muted
             }
         // An app's icon goes before its name and status, as in the drawer; widgets have none.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -524,7 +640,7 @@ private fun Card(
 @Composable
 private fun NewBadge() =
     BasicText(
-        "new",
+        stringResource(R.string.store_badge_new),
         Modifier.frame(1.dp, Palette.accent, Palette.accent.copy(alpha = 0.15f), radius = 6.dp).padding(horizontal = 5.dp, vertical = 1.dp),
         style = Mono.copy(color = Palette.accent, fontSize = TextSize.Small),
     )
@@ -538,7 +654,8 @@ private fun Screens(
 ) {
     // Until one has loaded, a slot is phone-shaped.
     val ratio = preview?.let { it.width.toFloat() / it.height } ?: PHONE_RATIO
-    val shot = Modifier.height(ScreenHeight).aspectRatio(ratio).frame(1.dp, Palette.border, radius = 8.dp).clip(RoundedCornerShape(8.dp))
+    // Keys stop at each, so the arrows go through them, the row scrolling to follow.
+    val shot = Modifier.height(ScreenHeight).aspectRatio(ratio).frame(1.dp, Palette.border, radius = 8.dp).clip(RoundedCornerShape(8.dp)).keyScrolled()
     LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item(key = "preview") { Box(shot.background(Palette.surface)) { preview?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) } } }
         items(screens, key = { it }) { path ->
@@ -556,9 +673,12 @@ private fun Detail(
     theme: String?,
     linux: Boolean,
     page: Int,
-    message: String?,
+    message: StoreMessage?,
     modifier: Modifier,
+    onOpen: () -> Unit,
     onInstall: () -> Unit,
+    onAddPages: () -> Unit,
+    onRemove: () -> Unit,
 ) = key(e.id) {
     val installed = market.installedVersion(e)
     val update = market.hasUpdate(e)
@@ -590,48 +710,107 @@ private fun Detail(
                     BasicText(e.name, Modifier.weight(1f, fill = false), style = Mono.copy(fontSize = TextSize.Title))
                     if (e.new) NewBadge()
                 }
-                val size = e.size?.let { " · ${it.first}x${it.second}" } ?: ""
-                BasicText("${e.category ?: OTHER} · ${e.author} · v${e.version} · ${e.license}$size", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                val size = e.size?.let { " · ${it.first}x${it.second}" } ?: pagesText(e)
+                BasicText("${category(e)} · ${e.author} · v${e.version} · ${e.license}$size", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
             }
         }
         BasicText(e.description, style = Mono.copy(fontSize = TextSize.Body))
         Spacer(Modifier.height(4.dp))
         when {
-            busy != null -> BasicText(busy, style = Mono.copy(color = Palette.accent))
-            !e.supported -> BasicText("needs a newer launcher (owl ${e.owl}); update the launcher to install it", style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
-            update -> BracketAction("update ${installed?.version} → ${e.version}", Palette.accent, onInstall)
+            busy != null -> BasicText(stringResource(busy), style = Mono.copy(color = Palette.accent))
+            !e.supported -> BasicText(stringResource(R.string.store_needs_newer_detail, e.owl), style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
+            // Settings leaves an edited one alone; here it's updated knowing what goes.
+            update && market.edited(e) ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicText(
+                        stringResource(if (installed?.sha256 == null) R.string.store_may_have_changes else R.string.store_you_changed),
+                        style = Mono.copy(color = Palette.red, fontSize = TextSize.Small),
+                    )
+                    BracketAction(stringResource(R.string.store_update_anyway, installed?.version.toString(), e.version), Palette.accent, Modifier.passesKeys(), onInstall)
+                }
+            update -> BracketAction(stringResource(R.string.store_update, installed?.version.toString(), e.version), Palette.accent, Modifier.passesKeys(), onInstall)
+            // An app opens from here, unless it waits for Linux.
+            installed != null && market.kind == OwlKind.App && (linux || !e.needsLinux) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AddedMark(market.kind)
+                    Spacer(Modifier.width(8.dp))
+                    BracketAction(stringResource(R.string.store_open), Palette.accent, Modifier.takesPassedKeys(), onOpen)
+                }
+            // A face's page removed on home, or one its version added, comes back only from here.
+            installed != null && market.missingPages(e) > 0 ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AddedMark(market.kind)
+                    Spacer(Modifier.width(8.dp))
+                    val n = market.missingPages(e)
+                    BracketAction(pluralStringResource(R.plurals.store_add_missing_pages, n, n), Palette.accent, Modifier.passesKeys(), onAddPages)
+                }
             installed != null -> AddedMark(market.kind)
             else ->
                 BracketAction(
                     when (market.kind) {
-                        OwlKind.Widget -> "add to page $page"
-                        OwlKind.Page -> "add as a page"
-                        OwlKind.App -> "install"
+                        OwlKind.Widget -> stringResource(R.string.store_add_to_page, page)
+                        OwlKind.Face -> stringResource(R.string.store_add_as_face)
+                        OwlKind.App, OwlKind.Panel, OwlKind.Keybar -> stringResource(R.string.store_install)
                     },
                     Palette.accent,
+                    // Keys on it wait out the install, for the open an app ends with.
+                    Modifier.passesKeys(),
                     onInstall,
                 )
         }
-        message?.let { BasicText(it, style = Mono.copy(color = Palette.red, fontSize = TextSize.Small)) }
+        if (installed != null && busy == null) {
+            // Asked first, as removing a page is.
+            var confirming by remember { mutableStateOf(false) }
+            val app = market.kind == OwlKind.App
+            val word = stringResource(if (app) R.string.store_uninstall else R.string.store_remove)
+            BracketAction(word, Palette.red) { confirming = true }
+            if (confirming) {
+                ConfirmDialog(
+                    stringResource(if (app) R.string.store_uninstall_confirm else R.string.store_remove_confirm, e.name),
+                    if (installed.pages.isEmpty()) {
+                        stringResource(R.string.store_remove_file)
+                    } else {
+                        stringResource(R.string.store_remove_files)
+                    },
+                    word,
+                    onDismiss = { confirming = false },
+                ) {
+                    confirming = false
+                    onRemove()
+                }
+            }
+        }
+        message?.let { BasicText(it.resolve(), style = Mono.copy(color = Palette.red, fontSize = TextSize.Small)) }
         if (!linux && e.needsLinux) NeedsLinuxNote(market.kind == OwlKind.App)
 
         Spacer(Modifier.height(4.dp))
         InstallDisclosure(e.requires, e.commands) {
             if (market.changedSinceApproval(e)) {
-                BasicText("its commands or packages changed since the version you approved", style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
+                BasicText(stringResource(R.string.store_changed_since_approval), style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
             }
         }
     }
 }
 
-/** Where an added widget, page or app went. */
+/** " · 2 pages" for a face with several, else nothing. */
+@Composable
+private fun pagesText(e: CatalogEntry) = if (e.pages.isEmpty()) "" else " · " + pluralStringResource(R.plurals.store_pages, 1 + e.pages.size, 1 + e.pages.size)
+
+/** [e]'s category, or other when the catalog gives it none. */
+@Composable
+private fun category(e: CatalogEntry) = e.category ?: stringResource(R.string.store_category_other)
+
+/** Where an added widget, face, app or panel went. */
 @Composable
 internal fun AddedMark(kind: OwlKind) =
     BasicText(
         when (kind) {
-            OwlKind.Widget -> "✓ on your home screen"
-            OwlKind.Page -> "✓ left of your first page"
-            OwlKind.App -> "✓ in your app drawer"
+            OwlKind.Widget -> stringResource(R.string.store_added_widget)
+            OwlKind.Face -> stringResource(R.string.store_added_face)
+            OwlKind.App -> stringResource(R.string.store_added_app)
+            OwlKind.Panel -> stringResource(R.string.store_added_panel)
+            // Shown only as keybar.owl, the file's name in the widgets folder.
+            OwlKind.Keybar -> stringResource(R.string.store_added_keybar)
         },
         style = Mono.copy(color = Palette.green),
     )
@@ -641,9 +820,9 @@ internal fun AddedMark(kind: OwlKind) =
 internal fun NeedsLinuxNote(app: Boolean) =
     BasicText(
         if (app) {
-            "needs Linux: it runs commands in Arch, so it shows in the app drawer once you install Linux in settings"
+            stringResource(R.string.store_needs_linux_app)
         } else {
-            "needs Linux: it runs commands in Arch, so it waits as a placeholder until you install Linux in settings"
+            stringResource(R.string.store_needs_linux_widget)
         },
         style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
     )
@@ -658,9 +837,12 @@ internal fun InstallDisclosure(
     commands: List<String>,
     notice: @Composable () -> Unit = {},
 ) {
-    val packages = requires.entries.joinToString("; ") { (m, l) -> "$m: ${l.joinToString(", ")}" }.ifEmpty { "none" }
-    BasicText("installs packages: $packages", style = Mono.copy(fontSize = TextSize.Small))
-    notice()
-    BasicText(if (commands.isEmpty()) "runs no commands" else "runs these commands in Arch:", style = Mono.copy(fontSize = TextSize.Small))
+    val packages = requires.entries.joinToString("; ") { (m, l) -> "$m: ${l.joinToString(", ")}" }.ifEmpty { stringResource(R.string.store_packages_none) }
+    // A stop for keys, at the end of a page that may have nothing else to scroll it there.
+    Column(Modifier.keyScrolled(around = true), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        BasicText(stringResource(R.string.store_installs_packages, packages), style = Mono.copy(fontSize = TextSize.Small))
+        notice()
+        BasicText(stringResource(if (commands.isEmpty()) R.string.store_runs_no_commands else R.string.store_runs_commands), style = Mono.copy(fontSize = TextSize.Small))
+    }
     for (c in commands) CodeBlock(c.trimEnd())
 }

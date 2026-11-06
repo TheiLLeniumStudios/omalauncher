@@ -22,8 +22,8 @@ android {
         applicationId = "dev.omalauncher.fork"
         minSdk = 29
         targetSdk = 37
-        versionCode = 16
-        versionName = "0.8.1"
+        versionCode = 31
+        versionName = "0.20.0"
         // Fork CI (apk.yml, release.yml): numbered by the commits on the branch, so a commit builds the same
         // number in either workflow, every build is newer than the last and than upstream's own. Edge builds
         // also carry their commit in the name.
@@ -48,6 +48,10 @@ android {
         }
     }
 
+    // Every language's text in every install: settings can pick a language the phone isn't set to (AppLanguage), and
+    // Play's language splits would only carry the phone's.
+    bundle { language { enableSplit = false } }
+
     // android.util.Log and friends are no-ops in JVM tests instead of throwing.
     testOptions { unitTests.isReturnDefaultValues = true }
 
@@ -63,6 +67,8 @@ android {
     }
 
     buildTypes {
+        // en-XA and ar-XB: text that stays plain English or left-to-right there isn't in res/ yet.
+        debug { isPseudoLocalesEnabled = true }
         release {
             // Shrinks the APK and drops what the app doesn't use, like the owl module's unused parts.
             isMinifyEnabled = true

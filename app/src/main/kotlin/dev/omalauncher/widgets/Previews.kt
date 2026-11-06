@@ -22,12 +22,18 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import dev.omalauncher.ui.KeybarPreview
+import dev.omalauncher.ui.LocalOffscreen
 import dev.omalauncher.ui.OwlAppWindow
+import dev.omalauncher.ui.PanelPreview
 import dev.omalauncher.ui.WidgetScreenPanel
 import dev.omalauncher.widgets.lang.OwlKind
 import dev.omalauncher.ui.WidgetTile
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -69,7 +75,7 @@ internal class Previews(
             )
         }
 
-    /** Draws [spec]'s screen { } as it opens over home (an app's window, for an app), at [widthPx] x [heightPx], like [render]. */
+    /** Draws [spec]'s screen { } as it opens over home (an app's window, for an app; a panel fully open), at [widthPx] x [heightPx], like [render]. */
     suspend fun renderScreen(
         spec: WidgetSpec,
         instance: dev.omalauncher.widgets.runtime.WidgetInstance,
@@ -79,7 +85,12 @@ internal class Previews(
         ready: suspend () -> Unit,
     ): Boolean =
         draw(spec, widthPx, heightPx, out, ready) {
-            if (instance.program.kind == OwlKind.App) OwlAppWindow(spec, instance) else WidgetScreenPanel(spec, instance, onDismiss = {})
+            when (instance.program.kind) {
+                OwlKind.App -> OwlAppWindow(spec, instance)
+                OwlKind.Panel -> PanelPreview(instance)
+                OwlKind.Keybar -> KeybarPreview(instance)
+                else -> WidgetScreenPanel(spec, instance, onDismiss = {})
+            }
         }
 
     private suspend fun draw(
@@ -114,7 +125,7 @@ internal class Previews(
                     window?.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
                     val view =
                         ComposeView(this.context).apply {
-                            setContent { content() }
+                            setContent { CompositionLocalProvider(LocalOffscreen provides true) { content() } }
                         }
                     setContentView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                     window?.decorView?.let {
@@ -128,16 +139,21 @@ internal class Previews(
             delay(SETTLE_MS)
             val image = latest ?: return false
             val bitmap = image.toBitmap(widthPx, heightPx)
-            out.parentFile?.mkdirs()
-            val tmp = File(out.path + ".tmp")
-            tmp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            bitmap.recycle()
-            return tmp.renameTo(out)
+            // Encoding a screen's worth of PNG took the main thread for a frame or more.
+            return withContext(Dispatchers.IO) {
+                out.parentFile?.mkdirs()
+                val tmp = File(out.path + ".tmp")
+                tmp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+                tmp.renameTo(out)
+            }
         } catch (e: Exception) {
             Log.w("widgets", "preview of ${spec.file.name} failed", e)
             return false
         } finally {
-            presentation?.dismiss()
+            // The window manager can refuse the removal (IllegalStateException from system_server on a Pixel 9 Pro,
+            // Android 17); thrown from here it crashed the launcher and skipped releasing the display.
+            runCatching { presentation?.dismiss() }.onFailure { Log.w("widgets", "cannot dismiss the preview", it) }
             owner.destroy()
             display.release()
             latest?.close()

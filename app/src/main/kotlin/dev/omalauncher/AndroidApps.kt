@@ -1,6 +1,5 @@
 package dev.omalauncher
 
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -35,6 +34,7 @@ import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.PathParser
 import dev.omalauncher.ui.iconMask
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -127,6 +127,24 @@ fun androidShortcutKey(
     profile: Long?,
 ) = "${ref.packageName}/#${profile ?: ""}#${ref.id}"
 
+/**
+ * App labels by package, looked up once each: the lookup is a binder call. A package that isn't installed (any more)
+ * is called by its name. Not thread-safe; each owner reads it from one thread at a time.
+ */
+class AppLabels(
+    private val context: Context,
+) {
+    private val labels = HashMap<String, String>()
+
+    operator fun get(pkg: String): String =
+        labels.getOrPut(pkg) {
+            runCatching {
+                val pm = context.packageManager
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            }.getOrDefault(pkg)
+        }
+}
+
 /** What a shortcut is called on home and in the drawer. */
 fun shortcutLabel(info: ShortcutInfo) = (info.shortLabel ?: info.longLabel)?.toString()?.takeIf { it.isNotBlank() } ?: info.id
 
@@ -187,7 +205,7 @@ class AndroidAppCatalog(
     /** Names by [AndroidApp.key] and [AndroidShortcut.key], in the phone's language now; home's tiles go by these. */
     val labels by derivedStateOf { apps.associate { it.key to it.label } + shortcuts.associate { it.key to it.label } }
 
-    private val byKey by derivedStateOf { apps.associateBy { it.key } }
+    internal val byKey by derivedStateOf { apps.associateBy { it.key } }
 
     /**
      * The app a home tile pinned as [component] in [profile] opens now. Apps that let you pick another icon (Duolingo,
@@ -261,6 +279,13 @@ class AndroidAppCatalog(
     var listsShortcuts by mutableStateOf(false)
         private set
 
+    /** Keys of the apps whose icons are drawn first, ahead of the alphabet: the ones showing as the launcher starts. */
+    var iconsFirst: () -> Set<String> = { emptySet() }
+
+    /** Whether the apps have been listed once; until then [apps] is empty because nothing was asked yet, not because there are none. */
+    var listed by mutableStateOf(false)
+        private set
+
     /** Icon edge in px: the drawer's 52dp icon at this screen's density. */
     private val iconPx = (52 * context.resources.displayMetrics.density).toInt().coerceAtLeast(48)
 
@@ -306,29 +331,22 @@ class AndroidAppCatalog(
                     addAction(Intent.ACTION_PROFILE_UNAVAILABLE)
                 }
             }
-        val receiver =
-            object : BroadcastReceiver() {
-                override fun onReceive(
-                    context: Context,
-                    intent: Intent,
-                ) {
-                    // Android says so before it's done removing: until then the profile still answers to its serial number.
-                    if (intent.action == Intent.ACTION_MANAGED_PROFILE_REMOVED || intent.action == Intent.ACTION_PROFILE_REMOVED) {
-                        val user =
-                            if (Build.VERSION.SDK_INT >= 33) {
-                                intent.getParcelableExtra(Intent.EXTRA_USER, UserHandle::class.java)
-                            } else {
-                                @Suppress("DEPRECATION")
-                                intent.getParcelableExtra(Intent.EXTRA_USER)
-                            }
-                        user?.let { userManager.getSerialNumberForUser(it) }?.takeIf { it >= 0 }?.let { removedProfiles += it }
+        context.registerNotExported(profileChanged) { intent ->
+            // Android says so before it's done removing: until then the profile still answers to its serial number.
+            if (intent.action == Intent.ACTION_MANAGED_PROFILE_REMOVED || intent.action == Intent.ACTION_PROFILE_REMOVED) {
+                val user =
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        intent.getParcelableExtra(Intent.EXTRA_USER, UserHandle::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(Intent.EXTRA_USER)
                     }
-                    // A lock broadcast must remove already rendered private labels and icons now.
-                    invalidatePrivate()
-                    reload()
-                }
+                user?.let { userManager.getSerialNumberForUser(it) }?.takeIf { it >= 0 }?.let { removedProfiles += it }
             }
-        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, profileChanged, Context.RECEIVER_NOT_EXPORTED) else context.registerReceiver(receiver, profileChanged)
+            // A lock broadcast must remove already rendered private labels and icons now.
+            invalidatePrivate()
+            reload()
+        }
         reload()
     }
 
@@ -663,43 +681,52 @@ class AndroidAppCatalog(
                 var seen = emptySet<Long>()
                 var confirmedLocked = emptySet<Long>()
                 val wasPrivate = privateProfiles
+                // The system can fail a call partway (a label's lookup threw BadParcelableException on a Galaxy A15
+                // when its process died or binder ran out of buffer): the drawer keeps what it shows until the next reload.
                 val infos =
-                    withContext(Dispatchers.IO) {
-                        val me = Process.myUserHandle()
-                        // Ours first; the system lists the profiles it lets a launcher see, ours included.
-                        val profiles = listOf(me) + runCatching { launcherApps.profiles }.getOrDefault(emptyList()).filter { it != me }
-                        canList = canListShortcuts()
-                        profiles
-                            .flatMap { user ->
-                                val profile = if (user == me) null else runCatching { userManager.getSerialNumberForUser(user) }.getOrNull()?.takeIf { it >= 0 }
-                                if (user != me && profile == null) return@flatMap emptyList()
-                                val kind = if (profile == null) ProfileKind.Personal else profileKind(user, known = profile in wasPrivate)
-                                if (profile != null) seen += profile
-                                val clone = kind == ProfileKind.Clone
-                                val isPrivate = kind == ProfileKind.Private
-                                val quietMode = if (profile == null) false else quietState(user)
-                                if (profile != null && quietMode != false) paused += profile
-                                if (profile != null && kind == ProfileKind.Private && quietMode == true) confirmedLocked += profile
-                                if (profile != null && clone) clones += profile
-                                if (profile != null && kind == ProfileKind.Work) works += profile
-                                if (profile != null && isPrivate) {
-                                    privates += profile
-                                    privateHandles += user
+                    try {
+                        withContext(Dispatchers.IO) {
+                            val me = Process.myUserHandle()
+                            // Ours first; the system lists the profiles it lets a launcher see, ours included.
+                            val profiles = listOf(me) + runCatching { launcherApps.profiles }.getOrDefault(emptyList()).filter { it != me }
+                            canList = canListShortcuts()
+                            profiles
+                                .flatMap { user ->
+                                    val profile = if (user == me) null else runCatching { userManager.getSerialNumberForUser(user) }.getOrNull()?.takeIf { it >= 0 }
+                                    if (user != me && profile == null) return@flatMap emptyList()
+                                    val kind = if (profile == null) ProfileKind.Personal else profileKind(user, known = profile in wasPrivate)
+                                    if (profile != null) seen += profile
+                                    val clone = kind == ProfileKind.Clone
+                                    val isPrivate = kind == ProfileKind.Private
+                                    val quietMode = if (profile == null) false else quietState(user)
+                                    if (profile != null && quietMode != false) paused += profile
+                                    if (profile != null && kind == ProfileKind.Private && quietMode == true) confirmedLocked += profile
+                                    if (profile != null && clone) clones += profile
+                                    if (profile != null && kind == ProfileKind.Work) works += profile
+                                    if (profile != null && isPrivate) {
+                                        privates += profile
+                                        privateHandles += user
+                                    }
+                                    if (isPrivate && (quietMode != false || lockGate.blocks(profile))) return@flatMap emptyList()
+                                    // A paused profile's shortcuts can't be listed; they stay, dimmed like its apps, and opening one resumes it.
+                                    // Private Space's stay out, like its apps from home.
+                                    if (canList && !isPrivate) made += if (profile != null && profile in paused) listed.filter { it.profile == profile }.map { null to it } else pinnedShortcuts(user, profile, clone)
+                                    // A profile can lock or disappear while resolving labels, too.
+                                    runCatching {
+                                        launcherApps.getActivityList(null, user)
+                                            .filter { it.componentName.packageName != context.packageName }
+                                            .map { it to AndroidApp(it.label.toString(), it.componentName, user, profile, it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone, isPrivate = isPrivate) }
+                                    }.onFailure { Log.w(TAG, "cannot list apps in $user", it) }
+                                        .getOrDefault(emptyList())
                                 }
-                                if (isPrivate && (quietMode != false || lockGate.blocks(profile))) return@flatMap emptyList()
-                                // A paused profile's shortcuts can't be listed; they stay, dimmed like its apps, and opening one resumes it.
-                                // Private Space's stay out, like its apps from home.
-                                if (canList && !isPrivate) made += if (profile != null && profile in paused) listed.filter { it.profile == profile }.map { null to it } else pinnedShortcuts(user, profile, clone)
-                                // A profile can lock or disappear while resolving labels, too.
-                                runCatching {
-                                    launcherApps.getActivityList(null, user)
-                                        .filter { it.componentName.packageName != context.packageName }
-                                        .map { it to AndroidApp(it.label.toString(), it.componentName, user, profile, it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone, isPrivate = isPrivate) }
-                                }.onFailure { Log.w(TAG, "cannot list apps in $user", it) }
-                                    .getOrDefault(emptyList())
-                            }
-                            // The same app in two profiles: the owner's one first.
-                            .sortedWith(compareBy({ it.second.label.lowercase() }, { it.second.profile != null }))
+                                // The same app in two profiles: the owner's one first.
+                                .sortedWith(compareBy({ it.second.label.lowercase() }, { it.second.profile != null }))
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "cannot list apps", e)
+                        return@launch
                     }
                 if (current != generation) return@launch
                 listsShortcuts = canList
@@ -723,12 +750,17 @@ class AndroidAppCatalog(
                     shortcuts.clear()
                     shortcuts += pinned
                 }
+                this@AndroidAppCatalog.listed = true
                 onReload()
                 val present = (list.map { it.key } + pinned.map { it.key }).toHashSet()
                 icons.keys.retainAll(present)
                 masks.keys.retainAll(present)
-                for ((info, app) in visibleInfos) {
+                // Started in this order, and they run four at a time: with hundreds of apps, the recent strip's would
+                // otherwise wait their turn in the alphabet.
+                val first = iconsFirst()
+                for ((info, app) in visibleInfos.sortedBy { it.second.key !in first }) {
                     if (app.key !in icons) loadIcon(app.key, app.profile, app.clone, app.isPrivate, { current == generation && (!app.isPrivate || privateAvailable(app)) }) { info.getIcon(0) }
+
                 }
                 // Apps change a shortcut's icon without an update, so these are drawn again each time; there are only a few.
                 for ((info, shortcut) in made) {

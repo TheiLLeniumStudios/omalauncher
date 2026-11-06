@@ -1,13 +1,19 @@
 package dev.omalauncher.linux
 
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.omalauncher.R
 import dev.omalauncher.upgrade.Managed
 import dev.omalauncher.upgrade.Policy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Files
@@ -20,11 +26,11 @@ import java.nio.file.LinkOption
 data class Agent(
     val bin: String,
     val name: String,
-    val description: String,
+    @StringRes val description: Int,
     /** mise package spec; for an agent with its own [install] it is only an identifier. */
     val pkg: String,
     /** How every launch starts it, before any prompt: the bin, plus flags it always needs. */
-    val launch: String = bin,
+    val command: String = bin,
     /** Whether mise needs node to install it: npm packages run their postinstall scripts with it. */
     val node: Boolean = pkg.startsWith("npm:"),
     /**
@@ -44,31 +50,31 @@ data class Agent(
  */
 val AGENTS =
     listOf(
-        Agent("claude", "Claude Code", "Anthropic's coding agent", "claude"),
+        Agent("claude", "Claude Code", R.string.linux_agent_claude, "claude"),
         // mise installs OpenCode 2 from npm (@opencode/cli).
-        Agent("opencode", "OpenCode", "Open source agent, any model provider", "opencode", node = true),
-        Agent("codex", "Codex", "OpenAI's coding agent", "codex"),
-        Agent("grok", "Grok", "xAI's coding agent", "npm:@xai-official/grok"),
-        Agent("copilot", "GitHub Copilot", "GitHub's coding agent", "copilot"),
-        Agent("crush", "Crush", "Charm's agent for the terminal", "crush"),
-        Agent("cursor-agent", "Cursor CLI", "Cursor's agent for the terminal", "cursor-agent"),
-        Agent("agy", "Antigravity", "Google's Gemini coding agent", "antigravity-cli"),
-        Agent("pi", "Pi", "Minimal, extensible coding agent", "pi"),
+        Agent("opencode", "OpenCode", R.string.linux_agent_opencode, "opencode", node = true),
+        Agent("codex", "Codex", R.string.linux_agent_codex, "codex"),
+        Agent("grok", "Grok", R.string.linux_agent_grok, "npm:@xai-official/grok"),
+        Agent("copilot", "GitHub Copilot", R.string.linux_agent_copilot, "copilot"),
+        Agent("crush", "Crush", R.string.linux_agent_crush, "crush"),
+        Agent("cursor-agent", "Cursor CLI", R.string.linux_agent_cursor, "cursor-agent"),
+        Agent("agy", "Antigravity", R.string.linux_agent_antigravity, "antigravity-cli"),
+        Agent("pi", "Pi", R.string.linux_agent_pi, "pi"),
         // In ~ omp moves itself to a temp dir unless told not to; the launcher starts agents in ~, where AGENTS.md is.
-        Agent("omp", "Oh My Pi", "Pi with tools and plugins built in", "github:can1357/oh-my-pi", launch = "omp --allow-home"),
-        Agent("ori", "Ori", "OpenRouter's coding agent", "github:OpenRouterLabs/ori-releases", launch = "ori code"),
+        Agent("omp", "Oh My Pi", R.string.linux_agent_omp, "github:can1357/oh-my-pi", command = "omp --allow-home"),
+        Agent("ori", "Ori", R.string.linux_agent_ori, "github:OpenRouterLabs/ori-releases", command = "ori code"),
         Agent(
             "muse",
             "Muse Code",
-            "Meta's coding agent",
+            R.string.linux_agent_muse,
             // Meta's launcher fetches and updates the native binary for this platform.
             "http:muse[url=https://api.meta.ai/muse-launcher.sh,bin=muse,version_list_url=https://api.meta.ai/muse-code/channels/muse-stable,version_json_path=.version]",
         ),
-        Agent("kimi", "Kimi", "Moonshot AI's coding agent", "npm:@moonshot-ai/kimi-code"),
+        Agent("kimi", "Kimi", R.string.linux_agent_kimi, "npm:@moonshot-ai/kimi-code"),
         Agent(
             "hermes",
             "Hermes Agent",
-            "Nous Research's agent; on this phone or another machine",
+            R.string.linux_agent_hermes,
             "hermes",
             // uv hardlinks wheels out of its cache, and the guest runs under proot's
             // --link2symlink with /tmp bound elsewhere, so those links fail; copy instead
@@ -76,6 +82,33 @@ val AGENTS =
             install = "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | " +
                 "env UV_LINK_MODE=copy bash -s -- --non-interactive --skip-browser --skip-computer-use",
         ),
+        // mise installs Qwen Code from npm.
+        Agent("qwen", "Qwen Code", R.string.linux_agent_qwen, "qwen", node = true),
+        // Its postinstall builds better-sqlite3, which npm skips unless allowed.
+        Agent("mcode", "MiniMax Code", R.string.linux_agent_mcode, "npm:@minimax-ai/code[allow_builds=better-sqlite3]"),
+        Agent(
+            "kiro-cli",
+            "Kiro CLI",
+            R.string.linux_agent_kiro,
+            // Kiro publishes per-platform archives behind a manifest of the stable release.
+            "http:kiro-cli[platforms_linux_x64_url=https://prod.download.cli.kiro.dev/stable/{{version}}/kirocli-x86_64-linux.tar.gz," +
+                "platforms_linux_arm64_url=https://prod.download.cli.kiro.dev/stable/{{version}}/kirocli-aarch64-linux.tar.gz," +
+                "version_list_url=https://prod.download.cli.kiro.dev/stable/latest/manifest.json,version_json_path=.version]",
+            command = "kiro-cli chat",
+        ),
+        Agent("kilo", "Kilo", R.string.linux_agent_kilo, "npm:@kilocode/cli"),
+        Agent(
+            "devin",
+            "Devin CLI",
+            R.string.linux_agent_devin,
+            // Cognition publishes per-platform archives behind a manifest of the current release.
+            "http:devin[platforms_linux_x64_url=https://static.devin.ai/cli/{{ version }}/devin-{{ version }}-x86_64-unknown-linux.tar.gz," +
+                "platforms_linux_arm64_url=https://static.devin.ai/cli/{{ version }}/devin-{{ version }}-aarch64-unknown-linux.tar.gz," +
+                "bin_path=bin,version_list_url=https://static.devin.ai/cli/current/manifest.json,version_json_path=.version]",
+        ),
+        // From npm; every Amp release has a prerelease-style version (0.0.<n>-g<hash>), which mise skips unless told.
+        Agent("amp", "Amp", R.string.linux_agent_amp, "amp[prerelease=true]", node = true),
+        Agent("commandcode", "Command Code", R.string.linux_agent_commandcode, "npm:command-code"),
     )
 
 /**
@@ -84,6 +117,24 @@ val AGENTS =
  * it on GitHub (404). Best effort, since the old mise may still manage.
  */
 const val MISE_SELF_UPDATE = "{ mise self-update -y || true; }"
+
+/**
+ * `mise prune -y`, but deleting the unused versions itself first: under proot, mise can't delete a version
+ * with a hard link in it (OpenCode's npm postinstall makes one), stops at "Directory not empty", and leaves
+ * 255 MB behind. `mise ls --prunable` keeps versions a running program started from, like prune does.
+ * proot's stand-in for the hard link (`.l2s.*`) can come back while the first `rm -rf` empties the folder, so
+ * it tries up to three times (#196).
+ */
+const val MISE_PRUNE =
+    "{ mise ls --prunable --json | sed -n 's/.*\"install_path\": \"\\([^\"]*\\)\".*/\\1/p' | " +
+        "while read -r p; do case \"\$p\" in */mise/installs/*) for i in 1 2 3; do rm -rf \"\$p\" 2>/dev/null && break; done ;; esac; done; " +
+        "mise prune -y; }"
+
+/**
+ * Downloads and caches are only needed during installs and upgrades; storage on phones is tight. npm-backed
+ * agents leave npm's cache behind too (125 MB after one update).
+ */
+const val MISE_CLEANUP = "mise cache clear && rm -rf ~/.local/share/mise/downloads ~/.npm/_cacache"
 
 /** Adds node to the global config when an installed agent needs it but was installed before it did (OpenCode 1). */
 val MISE_NODE_FOR_AGENTS =
@@ -95,7 +146,9 @@ val MISE_NODE_FOR_AGENTS =
  * Starts [agentBin] with a first prompt; OpenCode takes it as --prompt, Hermes as `chat -q`,
  * Antigravity and Copilot as -i (they refuse a bare argument), the others as an argument.
  * Ori's agent is `ori code`, which stays open only with --interactive. Kimi takes a prompt only in
- * print mode, so the session it ran in is continued after the answer.
+ * print mode, so the session it ran in is continued after the answer. Qwen Code and Kilo bind it to
+ * an option, MiniMax Code, Kiro, Devin and Command Code take it after --, and Amp reads its first
+ * message from stdin (an argument would be one turn that exits), as Omarchy's omarchy-agent starts them.
  * [readOnly], for reading something untrusted: Claude Code and Antigravity start in plan mode, where they
  * can read but not run commands or change files whatever the user's settings say; oh-my-pi gets only its
  * read-only tools. The others have no flag for that we can rely on inside proot, and only have the prompt.
@@ -105,8 +158,9 @@ fun agentInvocation(
     prompt: String,
     readOnly: Boolean = false,
 ): String {
-    val quoted = shellQuote(prompt)
-    val launch = AGENTS.firstOrNull { it.bin == agentBin }?.launch ?: agentBin
+    // A prompt starting with a dash would be read as an option (claude --settings=... runs hooks); a space in front isn't.
+    val quoted = shellQuote(if (prompt.startsWith("-")) " $prompt" else prompt)
+    val launch = AGENTS.firstOrNull { it.bin == agentBin }?.command ?: agentBin
     return when {
         agentBin == "opencode" -> "$launch --prompt $quoted"
         agentBin == "copilot" -> "$launch -i $quoted"
@@ -117,12 +171,19 @@ fun agentInvocation(
         agentBin == "kimi" -> "$launch --prompt $quoted && kimi --continue"
         agentBin == "agy" && readOnly -> "$launch --mode plan -i $quoted"
         agentBin == "agy" -> "$launch -i $quoted"
+        agentBin == "qwen" -> "$launch --prompt-interactive=$quoted"
+        agentBin == "kilo" -> "$launch --prompt=$quoted"
+        agentBin == "kiro-cli" -> "kiro-cli chat -- $quoted"
+        agentBin == "mcode" || agentBin == "devin" || agentBin == "commandcode" -> "$launch -- $quoted"
+        agentBin == "amp" -> "printf '%s\\n' $quoted | amp"
         else -> "$launch $quoted"
     }
 }
 
 class AgentStore(
     private val proot: Proot,
+    /** A string resource with one argument, in the app's language. */
+    private val text: (Int, String) -> String,
     /** Called when the set of installed agents changed, so their desktop entries follow. */
     private val onChanged: () -> Unit,
 ) {
@@ -180,7 +241,7 @@ class AgentStore(
     }
 
     suspend fun install(agent: Agent) =
-        run(agent, "installing") { installScript(agent) }.also { ok -> if (ok) onInstalled(agent) }
+        run(agent, R.string.linux_job_installing) { installScript(agent) }.also { ok -> if (ok) onInstalled(agent) }
 
     /** Installs [agent] with its own installer, or with mise (bootstrapping mise if needed). */
     fun installScript(agent: Agent) =
@@ -188,9 +249,7 @@ class AgentStore(
             ?: buildString {
                 append(if (mise.exists()) "$MISE_SELF_UPDATE && " else "curl -fsSL https://mise.run | sh && ")
                 if (agent.node) append("mise use -g node@lts && ")
-                append("mise use -g ${shellQuote(agent.pkg)}")
-                // Downloads are only needed during install; storage on phones is tight.
-                append(" && mise cache clear && rm -rf ~/.local/share/mise/downloads")
+                append("mise use -g ${shellQuote(agent.pkg)} && $MISE_CLEANUP")
             }
 
     /** Call after [installScript] succeeded: makes the agent show up in the drawer. */
@@ -199,27 +258,46 @@ class AgentStore(
         onChanged()
     }
 
-    /** Removes an agent mise installed (see [removable]); one in ~/.local/bin stays, as it's the user's. */
-    suspend fun remove(agent: Agent) =
-        run(agent, "removing") { "mise unuse -g ${shellQuote(agent.pkg)} && mise prune -y" }
-            .also {
-                refresh()
-                onChanged()
-            }
+    /**
+     * mise locks its config and its installs while it works, and a second `mise use` at the same time fails on
+     * the lock: installs, removals and system updates take this first, one at a time, the others waiting.
+     */
+    val lock = Mutex()
+
+    /** Stops what the launcher itself keeps running of an agent, such as Voice's; whether something was stopped. */
+    var release: (Agent) -> Boolean = { false }
+
+    /**
+     * mise keeps a version that a running program started from, so an agent still open in a window or terminal
+     * stays installed, out of mise's config; the row then says to close it, instead of looking untouched. What
+     * the launcher runs itself (Voice) is stopped first.
+     */
+    suspend fun remove(agent: Agent): Boolean {
+        // Its process ends on another thread: a moment, so mise doesn't find it still running.
+        if (release(agent)) delay(1500)
+        val ok = run(agent, R.string.linux_job_removing) { "mise unuse -g ${shellQuote(agent.pkg)} && $MISE_PRUNE" }
+        refresh()
+        onChanged()
+        if (ok && isInstalled(agent)) states[agent.bin] = JobState.Failed(listOf(text(R.string.agents_still_running, agent.name)))
+        return ok && !isInstalled(agent)
+    }
 
     /** Drawer entries for the installed agents, with their logos (see [bundledIcons]); each opens in a terminal in the home directory. */
     fun managed(): List<Managed> =
         installed.map { agent ->
             Managed.text(File(proot.applications, "agent-${agent.bin}.desktop"), Policy.Owned) {
-                "[Desktop Entry]\nType=Application\nName=${agent.name}\nTerminal=true\nExec=${agent.launch}\nIcon=${bundledIcon("agent-${agent.bin}")}\n"
+                "[Desktop Entry]\nType=Application\nName=${agent.name}\nTerminal=true\nExec=${agent.command}\nIcon=${bundledIcon("agent-${agent.bin}")}\n"
             }
         } + codexConfig()
 
     /**
      * Codex starts a shared background server and reads its start time with `ps`; when that fails, Codex
      * refuses to start ("failed to read start time for pid-managed app server", rerun with --no-daemon).
-     * Proot kills that server with its window anyway, so don't start it. A system layer, so the user's
-     * ~/.codex/config.toml stays theirs and can turn it back on.
+     * Proot kills that server with its window anyway, so don't start it. Codex's sandbox can't run either:
+     * before calling bwrap it looks up its socket directory in /proc/self/mountinfo, which is Android's
+     * under proot, and fails every command ("cannot establish app-server socket mount isolation"). The
+     * bwrap shim drops the sandbox anyway, so full access is what Codex already had. A system layer, so
+     * the user's ~/.codex/config.toml stays theirs and can change both.
      */
     private fun codexConfig() =
         if (installed.none { it.bin == "codex" }) {
@@ -227,18 +305,29 @@ class AgentStore(
         } else {
             listOf(
                 Managed.text(File(proot.rootfs, "etc/codex/config.toml"), Policy.Owned) {
-                    "# Written by the launcher.\n[features]\ndaemon_auto_start = false\n"
+                    "# Written by the launcher.\nsandbox_mode = \"danger-full-access\"\n\n[features]\ndaemon_auto_start = false\n"
                 },
             )
         }
 
     private suspend fun run(
         agent: Agent,
-        action: String,
+        @StringRes action: Int,
         script: () -> String,
     ): Boolean {
-        val (ok, _) = proot.trackedJob(action, withContext(Dispatchers.IO) { script() }) { states[agent.bin] = it }
-        Log.i("agents", "$action ${agent.bin}: ${if (ok) "ok" else "failed"}")
+        val publish: (JobState) -> Unit = { states[agent.bin] = it }
+        val waiting = JobState.Working(R.string.linux_job_waiting, emptyList())
+        publish(waiting)
+        // The script is made once it's this job's turn: the one before may have installed mise.
+        val (ok, _) =
+            try {
+                lock.withLock { proot.trackedJob(action, withContext(Dispatchers.IO) { script() }, publish = publish) }
+            } catch (e: CancellationException) {
+                // Its screen closed before its turn: the row isn't left "waiting…", which also blocks installing it again.
+                if (states[agent.bin] === waiting) states.remove(agent.bin)
+                throw e
+            }
+        Log.i("agents", "${agent.bin}: ${if (ok) "ok" else "failed"}")
         return ok
     }
 }
