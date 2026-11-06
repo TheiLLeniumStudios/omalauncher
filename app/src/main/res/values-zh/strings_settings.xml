@@ -53,4 +53,7 @@
     <string name="settings_minutes_ago">%1$d 分钟前</string>
     <string name="settings_hours_ago">%1$d 小时前</string>
     <string name="settings_days_ago">%1$d 天前</string>
+    <string name="settings_private_space">私密空间</string>
+    <string name="settings_private_space_shown">在应用抽屉中显示 · 点按隐藏</string>
+    <string name="settings_private_space_hidden">在应用抽屉中隐藏 · 点按显示</string>
 </resources>

@@ -10,4 +10,6 @@
     <string name="activity_voice">Voz</string>
     <string name="activity_settings">Configurações</string>
     <string name="notification_listener">Widgets do Omalauncher</string>
+    <string name="lock_enter_password">digite a senha</string>
+    <string name="files_linux_in_android_apps">arquivos do linux em apps android</string>
 </resources>

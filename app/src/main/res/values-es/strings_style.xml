@@ -135,4 +135,11 @@
     <string name="agents_remove">desinstalar</string>
     <string name="agents_still_running">%1$s sigue abierto: ciérralo y vuelve a desinstalarlo</string>
     <string name="agents_install">instalar</string>
+    <string name="style_bar_apps">apps de la barra</string>
+    <string name="style_picked">elegidas</string>
+    <string name="style_recent">recientes</string>
+    <string name="style_system_lock">sistema y bloqueo</string>
+    <string name="style_wallpaper_hint">también pone el fondo de inicio y bloqueo · algunos dispositivos (Samsung, Xiaomi) lo anulan en los ajustes del sistema</string>
+    <string name="style_lock_cover">cubierta de bloqueo</string>
+    <string name="agents_local_bin">~/.local/bin</string>
 </resources>

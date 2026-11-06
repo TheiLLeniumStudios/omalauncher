@@ -171,4 +171,14 @@ class WithoutLocation(
     override fun android(name: String): Value = if (name == "location") Null else services.android(name)
 
     override fun androidUpdates(name: String): Flow<Value>? = if (name == "location") null else services.androidUpdates(name)
+
+    /** `location("request")` asks nobody: a widget that may not read it never raises the permission dialog. */
+    override fun act(
+        name: String,
+        args: List<Value>,
+        done: () -> Unit,
+    ) {
+        if (name == "location") return
+        services.act(name, args, done)
+    }
 }

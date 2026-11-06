@@ -172,4 +172,5 @@
     <string name="licenses_use_androidsvg">desenha ícones SVG</string>
     <string name="licenses_use_zxing">desenha os QR codes com que os widgets são compartilhados</string>
     <string name="licenses_use_json">lê e escreve JSON</string>
+    <string name="linux_agent_hermes">o agente da Nous Research; neste telefone ou outro</string>
 </resources>

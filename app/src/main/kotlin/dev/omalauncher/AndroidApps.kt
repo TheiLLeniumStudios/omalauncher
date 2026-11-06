@@ -244,6 +244,9 @@ class AndroidAppCatalog(
     /** The users of [privateProfiles], so checks on hot paths (home, notifications) need no system call. */
     private var privateUsers = emptySet<UserHandle>()
 
+    /** Whether [user] is one of the Private Space profiles the last load saw. */
+    fun isPrivate(user: UserHandle) = user in privateUsers
+
     /** Every other profile the last load saw; [refresh] reloads when that changes. */
     private var knownProfiles = emptySet<Long>()
 

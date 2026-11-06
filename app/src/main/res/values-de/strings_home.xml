@@ -66,4 +66,5 @@
     <string name="drawer_action_pin">zum startbildschirm hinzufügen</string>
     <string name="drawer_action_info">app-info</string>
     <string name="drawer_action_uninstall">deinstallieren</string>
+    <string name="drawer_action_remove_from_bar">von leiste entfernen</string>
 </resources>

@@ -10,4 +10,6 @@
     <string name="activity_voice">Suara</string>
     <string name="activity_settings">Setelan</string>
     <string name="notification_listener">Widget Omalauncher</string>
+    <string name="lock_enter_password">masukkan kata sandi</string>
+    <string name="files_linux_in_android_apps">file linux di aplikasi android</string>
 </resources>

@@ -166,4 +166,5 @@
     <string name="licenses_use_androidsvg">menggambar ikon SVG</string>
     <string name="licenses_use_zxing">menggambar kode QR untuk berbagi widget</string>
     <string name="licenses_use_json">membaca dan menulis JSON</string>
+    <string name="linux_agent_hermes">agen Nous Research; di ponsel ini atau perangkat lain</string>
 </resources>

@@ -53,4 +53,7 @@
     <string name="settings_minutes_ago">%1$d mnt lalu</string>
     <string name="settings_hours_ago">%1$d jam lalu</string>
     <string name="settings_days_ago">%1$d hr lalu</string>
+    <string name="settings_private_space">ruang pribadi</string>
+    <string name="settings_private_space_shown">tampil di laci aplikasi · ketuk untuk menyembunyikan</string>
+    <string name="settings_private_space_hidden">tersembunyi di laci aplikasi · ketuk untuk menampilkan</string>
 </resources>

@@ -10,4 +10,6 @@
     <string name="activity_voice">语音</string>
     <string name="activity_settings">设置</string>
     <string name="notification_listener">Omalauncher 小组件</string>
+    <string name="lock_enter_password">输入密码</string>
+    <string name="files_linux_in_android_apps">android 应用中的 linux 文件</string>
 </resources>

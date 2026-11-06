@@ -157,4 +157,9 @@
     <string name="store_theme_not_on_github">%1$s tidak ada di GitHub</string>
     <string name="store_theme_no_colors">tidak ada colors.toml atau alacritty.toml</string>
     <string name="store_theme_cant_move">tidak dapat memindahkan tema ke tempatnya</string>
+    <string name="store_unreviewed">%1$s dari github.com/%2$s, diterbitkan tanpa peninjauan</string>
+    <string name="store_publish_own_info">Atau langsung ke store milikmu, tanpa peninjauan:</string>
+    <string name="store_publish_to_store">terbitkan ke %1$s dengan agen</string>
+    <string name="store_checking">memeriksa…</string>
+    <string name="store_add_placeholder">owner/repo atau URL</string>
 </resources>

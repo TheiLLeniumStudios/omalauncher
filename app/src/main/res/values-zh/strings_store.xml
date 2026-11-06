@@ -157,4 +157,9 @@
     <string name="store_theme_not_on_github">%1$s 不在 GitHub 上</string>
     <string name="store_theme_no_colors">它没有 colors.toml 或 alacritty.toml</string>
     <string name="store_theme_cant_move">无法把主题移到目标位置</string>
+    <string name="store_unreviewed">来自 github.com/%2$s 的%1$s，未经审核发布</string>
+    <string name="store_publish_own_info">或直接发布到你自己的商店，无需审核：</string>
+    <string name="store_publish_to_store">用智能体发布到 %1$s</string>
+    <string name="store_checking">检查中…</string>
+    <string name="store_add_placeholder">owner/repo 或 URL</string>
 </resources>

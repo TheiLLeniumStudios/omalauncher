@@ -64,4 +64,5 @@
     <string name="drawer_action_pin">添加到主屏幕</string>
     <string name="drawer_action_info">应用信息</string>
     <string name="drawer_action_uninstall">卸载</string>
+    <string name="drawer_action_remove_from_bar">从栏中移除</string>
 </resources>

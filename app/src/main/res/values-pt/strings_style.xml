@@ -135,4 +135,11 @@
     <string name="agents_remove">remover</string>
     <string name="agents_still_running">%1$s ainda está aberto: feche e remova de novo</string>
     <string name="agents_install">instalar</string>
+    <string name="style_bar_apps">apps da barra</string>
+    <string name="style_picked">escolhidos</string>
+    <string name="style_recent">recentes</string>
+    <string name="style_system_lock">sistema e bloqueio</string>
+    <string name="style_wallpaper_hint">também define o papel de parede da tela inicial e bloqueio · alguns aparelhos (Samsung, Xiaomi) substituem a tela de bloqueio nas configurações</string>
+    <string name="style_lock_cover">capa de bloqueio</string>
+    <string name="agents_local_bin">~/.local/bin</string>
 </resources>

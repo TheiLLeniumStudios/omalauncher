@@ -55,4 +55,7 @@
     <string name="settings_minutes_ago">hace %1$d min</string>
     <string name="settings_hours_ago">hace %1$d h</string>
     <string name="settings_days_ago">hace %1$d d</string>
+    <string name="settings_private_space">espacio privado</string>
+    <string name="settings_private_space_shown">visible en el cajón de apps · toca para ocultar</string>
+    <string name="settings_private_space_hidden">oculto en el cajón de apps · toca para mostrar</string>
 </resources>

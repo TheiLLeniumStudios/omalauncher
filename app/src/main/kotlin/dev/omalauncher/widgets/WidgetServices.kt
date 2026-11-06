@@ -299,6 +299,7 @@ class WidgetServices(
     /** "work" or "clone" for an app in a profile beside the launcher's own, as the drawer marks it; null for its own. */
     private fun profileKind(user: UserHandle): String? {
         if (user == Process.myUserHandle()) return null
+        if (runtime.androidApps.isPrivate(user)) return "private"
         val serial = context.getSystemService(UserManager::class.java).getSerialNumberForUser(user)
         return if (runtime.androidApps.cloned(serial)) "clone" else "work"
     }
@@ -678,8 +679,12 @@ class WidgetServices(
             "typeText" -> return runtime.keyboard.type(arg)
             "latch" -> return runtime.keyboard.latch(arg, args.getOrNull(1).textOrNull())
             "pickImages" -> return runtime.keyboard.pickImages()
-            // Nothing to refresh: the source follows the grant itself.
-            "location" -> return runtime.location.request()
+            // Nothing to refresh: the source follows the grant itself. The home screen asks once, for the widgets' Location.
+            "location" -> {
+                location.wanted.value = true
+                location.refresh()
+                return
+            }
             "calendar" ->
                 return when {
                     arg == "request" -> runtime.calendar.request()

@@ -166,4 +166,5 @@
     <string name="licenses_use_androidsvg">绘制 SVG 图标</string>
     <string name="licenses_use_zxing">绘制分享小组件用的二维码</string>
     <string name="licenses_use_json">读写 JSON</string>
+    <string name="linux_agent_hermes">Nous Research 的智能体；可在此手机或其他设备上运行</string>
 </resources>

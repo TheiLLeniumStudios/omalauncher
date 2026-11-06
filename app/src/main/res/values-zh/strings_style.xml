@@ -131,4 +131,11 @@
     <string name="agents_remove">移除</string>
     <string name="agents_still_running">%1$s 仍在运行：请先关闭，再移除一次</string>
     <string name="agents_install">安装</string>
+    <string name="style_bar_apps">栏应用</string>
+    <string name="style_picked">已选</string>
+    <string name="style_recent">最近</string>
+    <string name="style_system_lock">系统与锁屏</string>
+    <string name="style_wallpaper_hint">同时设置主屏幕与锁屏壁纸 · 部分设备（三星、小米）会在系统设置中覆盖锁屏</string>
+    <string name="style_lock_cover">锁屏封面</string>
+    <string name="agents_local_bin">~/.local/bin</string>
 </resources>

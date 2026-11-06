@@ -62,4 +62,7 @@
     <string name="settings_minutes_ago">vor %1$d min</string>
     <string name="settings_hours_ago">vor %1$d std</string>
     <string name="settings_days_ago">vor %1$d tg</string>
+    <string name="settings_private_space">privater bereich</string>
+    <string name="settings_private_space_shown">im app-drawer sichtbar · zum ausblenden tippen</string>
+    <string name="settings_private_space_hidden">im app-drawer ausgeblendet · zum anzeigen tippen</string>
 </resources>

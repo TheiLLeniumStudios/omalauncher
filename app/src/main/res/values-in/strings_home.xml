@@ -64,4 +64,5 @@
     <string name="drawer_action_pin">tambah ke layar utama</string>
     <string name="drawer_action_info">info aplikasi</string>
     <string name="drawer_action_uninstall">uninstal</string>
+    <string name="drawer_action_remove_from_bar">hapus dari bilah</string>
 </resources>

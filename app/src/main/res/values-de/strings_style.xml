@@ -133,4 +133,11 @@
     <string name="agents_remove">deinstallieren</string>
     <string name="agents_still_running">%1$s läuft noch: schließ es und deinstalliere es dann noch mal</string>
     <string name="agents_install">installieren</string>
+    <string name="style_bar_apps">leisten-apps</string>
+    <string name="style_picked">gewählt</string>
+    <string name="style_recent">zuletzt</string>
+    <string name="style_system_lock">system &amp; sperre</string>
+    <string name="style_wallpaper_hint">setzt auch start- &amp; sperrbildschirm · manche geräte (samsung, xiaomi) überschreiben den sperrbildschirm in den systemeinstellungen</string>
+    <string name="style_lock_cover">sperrbildschirm-cover</string>
+    <string name="agents_local_bin">~/.local/bin</string>
 </resources>

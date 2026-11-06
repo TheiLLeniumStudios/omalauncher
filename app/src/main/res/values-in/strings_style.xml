@@ -131,4 +131,11 @@
     <string name="agents_remove">hapus</string>
     <string name="agents_still_running">%1$s masih berjalan: tutup dulu, lalu hapus lagi</string>
     <string name="agents_install">instal</string>
+    <string name="style_bar_apps">aplikasi bilah</string>
+    <string name="style_picked">dipilih</string>
+    <string name="style_recent">terbaru</string>
+    <string name="style_system_lock">sistem &amp; kunci</string>
+    <string name="style_wallpaper_hint">juga memasang wallpaper layar utama &amp; kunci · sebagian perangkat (Samsung, Xiaomi) menimpanya di setelan sistem</string>
+    <string name="style_lock_cover">sampul kunci</string>
+    <string name="agents_local_bin">~/.local/bin</string>
 </resources>

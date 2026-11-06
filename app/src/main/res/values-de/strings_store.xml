@@ -216,4 +216,9 @@
     <string name="store_theme_not_on_github">%1$s ist nicht auf GitHub</string>
     <string name="store_theme_no_colors">hat keine colors.toml oder alacritty.toml</string>
     <string name="store_theme_cant_move">kann das theme nicht an seinen platz schieben</string>
+    <string name="store_unreviewed">%1$s von github.com/%2$s, ohne prüfung veröffentlicht</string>
+    <string name="store_publish_own_info">Oder direkt in einen deiner stores, ohne prüfung:</string>
+    <string name="store_publish_to_store">mit agent in %1$s veröffentlichen</string>
+    <string name="store_checking">prüfe…</string>
+    <string name="store_add_placeholder">owner/repo oder URL</string>
 </resources>
